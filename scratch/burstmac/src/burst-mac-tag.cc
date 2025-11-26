@@ -1,0 +1,92 @@
+#include "burst-mac-tag.h"
+#include "ns3/log.h"
+
+namespace ns3 {
+
+NS_LOG_COMPONENT_DEFINE ("BurstMacTag");
+NS_OBJECT_ENSURE_REGISTERED (BurstMacTag);
+
+TypeId
+BurstMacTag::GetTypeId (void)
+{
+  static TypeId tid = TypeId ("ns3::BurstMacTag")
+    .SetParent<Tag> ()
+    .AddConstructor<BurstMacTag> ();
+  return tid;
+}
+
+TypeId
+BurstMacTag::GetInstanceTypeId (void) const
+{
+  return GetTypeId ();
+}
+
+uint32_t
+BurstMacTag::GetSerializedSize (void) const
+{
+  // small and simple: 1 byte + 4 + 4
+  return 1 + 4 + 4;
+}
+
+void
+BurstMacTag::Serialize (TagBuffer buf) const
+{
+  // write bytes in a simple order
+  buf.WriteU8 (is_burst_flag ? 1 : 0);
+  buf.WriteU32 (src_node);
+  buf.WriteU32 (assigned_slot);
+}
+
+void
+BurstMacTag::Deserialize (TagBuffer buf)
+{
+  is_burst_flag = (buf.ReadU8 () != 0);
+  src_node = buf.ReadU32 ();
+  assigned_slot = buf.ReadU32 ();
+}
+
+void
+BurstMacTag::Print (std::ostream &os) const
+{
+  os << "B=" << (is_burst_flag ? 1 : 0)
+     << " S=" << src_node
+     << " sl=" << assigned_slot;
+}
+
+void
+BurstMacTag::set_burst (bool b)
+{
+  is_burst_flag = b;
+}
+
+bool
+BurstMacTag::is_burst (void) const
+{
+  return is_burst_flag;
+}
+
+void
+BurstMacTag::set_src (uint32_t id)
+{
+  src_node = id;
+}
+
+uint32_t
+BurstMacTag::src (void) const
+{
+  return src_node;
+}
+
+void
+BurstMacTag::set_slot (uint32_t s)
+{
+  assigned_slot = s;
+}
+
+uint32_t
+BurstMacTag::slot (void) const
+{
+  return assigned_slot;
+}
+
+} // namespace ns3

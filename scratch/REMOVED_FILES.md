@@ -1,0 +1,1 @@
+Removed files:\n- scratch/burst-mac-sim.cc\n- scratch/burst-mac-mesh-sim.cc\n\nReason: cleanup of duplicate prototype scratch files not needed for main Burst-MAC implementation. Files were local/ignored and removed to lighten workspace.
