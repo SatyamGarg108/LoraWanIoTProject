@@ -1,3 +1,7 @@
+// Implementation of the BurstScheduler: groups bursting nodes by a lightweight
+// 'VirtualChannel' key and assigns simple incremental slots. This code is
+// intentionally straightforward and suitable for demonstration and testing.
+
 #include "burst-scheduler.h"
 #include "burst-mac-tag.h"
 #include "ns3/log.h"
@@ -28,16 +32,20 @@ BurstScheduler::~BurstScheduler ()
 void
 BurstScheduler::OnUplink (Ptr<const Packet> packet)
 {
-  // very simple and not-very-clean implementation
+  // Inspect the packet for the BurstMacTag, which indicates a node wanting
+  // to join the burst group and be assigned a slot.
   BurstMacTag tag;
   if (! packet->PeekPacketTag (tag))
     return; // nothing to do
 
   if (! tag.is_burst ())
-    return; // not burst
+    return; // not a burst registration
 
   uint32_t node = tag.src ();
 
+  // Use lorawan::LoraTag (if present) to derive a simple VirtualChannel
+  // key (data rate + frequency) so that nodes on different channels are
+  // scheduled independently.
   lorawan::LoraTag ltag;
   VirtualChannel vc = {0, 0.0};
   if (packet->PeekPacketTag (ltag)) {
@@ -45,12 +53,15 @@ BurstScheduler::OnUplink (Ptr<const Packet> packet)
     vc.freq = ltag.GetFrequency ();
   }
 
+  // Ensure a VCState exists for this channel
   if (vc_map.find (vc) == vc_map.end ()) {
     VCState st;
     vc_map[vc] = st;
   }
 
   VCState &st = vc_map[vc];
+
+  // If this node is new in the VC, assign it the next free slot
   bool found = false;
   for (size_t i = 0; i < st.nodeIds.size (); ++i) {
     if (st.nodeIds[i] == node) { found = true; break; }

@@ -1,3 +1,15 @@
+"""
+run_and_plot.py
+Analysis helper for the Burst-MAC example.
+
+This script invokes the built ns-3 example `burstmac-simulation` with
+different node counts and burst percentages, parses its stdout for the
+reported PDR metrics, and generates a plot `burstmac_pdr.png`.
+
+Usage: run directly as a script. It assumes the ns-3 top-level binary
+is reachable at `./ns3` relative to this script's location.
+"""
+
 import subprocess
 import matplotlib.pyplot as plt
 import re
@@ -8,6 +20,7 @@ def run_simulation(n_nodes, burst_percent):
         "./ns3", "run", 
         f"burstmac-simulation --nNodes={n_nodes} --burstPercent={burst_percent}"
     ]
+    # Run the example using the workspace ns-3 binary. cwd points to repo root.
     result = subprocess.run(cmd, capture_output=True, text=True, cwd="../../../")
     
     # Parse Output

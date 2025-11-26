@@ -1,3 +1,9 @@
+// Implementation of the BurstNodeApp. The app alternates between a normal
+// randomized transmit mode and a slot-based burst mode. When entering burst
+// mode it registers with the (simulated) scheduler and polls for a slot
+// assignment; once assigned it transmits in the assigned slot during each
+// superframe.
+
 #include "burst-node-app.h"
 #include "burst-mac-tag.h"
 #include "ns3/log.h"
@@ -28,6 +34,7 @@ BurstNodeApp::BurstNodeApp ()
     m_nodeId (0),
     m_assignedSlot (UINT32_MAX)
 {
+  // random scalar used to jitter normal-mode transmissions
   m_random = CreateObject<UniformRandomVariable> ();
 }
 
@@ -49,6 +56,7 @@ BurstNodeApp::Setup (Ptr<lorawan::EndDeviceLorawanMac> mac, Ptr<BurstScheduler> 
 void
 BurstNodeApp::StartApplication (void)
 {
+  // Begin in normal mode with periodic transmissions
   ScheduleNextTx ();
 }
 
@@ -66,9 +74,10 @@ BurstNodeApp::TriggerBurst (void)
   m_isBurst = true;
   NS_LOG_INFO ("Node " << m_nodeId << " Entering BURST Mode");
   
+  // Cancel any pending normal-mode transmission and register for burst
   Simulator::Cancel (m_sendEvent);
   
-  // Send Registration Packet immediately
+  // Send Registration Packet immediately so the scheduler can observe this node
   SendPacket ();
   
   // Start polling for slot assignment (Simulates waiting for Downlink)
@@ -90,9 +99,9 @@ BurstNodeApp::StopBurst (void)
 void
 BurstNodeApp::ScheduleNextTx (void)
 {
-  if (m_isBurst) return; // Handled by SlotLoop
+  if (m_isBurst) return; // Handled by SlotLoop when bursting
 
-  // Normal Mode: Random Interval
+  // Normal Mode: Random Interval around the configured mean
   double scalar = m_random->GetValue (0.8, 1.2);
   Time delay = Seconds (m_normalInterval.GetSeconds () * scalar);
   m_sendEvent = Simulator::Schedule (delay, &BurstNodeApp::SendPacket, this);
@@ -101,8 +110,9 @@ BurstNodeApp::ScheduleNextTx (void)
 void
 BurstNodeApp::SendPacket (void)
 {
-  Ptr<Packet> packet = Create<Packet> (20); // Payload size
+  Ptr<Packet> packet = Create<Packet> (20); // Payload size (bytes)
   
+  // Attach a BurstMacTag so the server/scheduler can detect burst-capable nodes
   BurstMacTag tag;
   tag.set_burst (m_isBurst);
   tag.set_src (m_nodeId);
@@ -112,6 +122,7 @@ BurstNodeApp::SendPacket (void)
   
   if (!m_isBurst)
     {
+      // Continue normal operation scheduling
       ScheduleNextTx ();
     }
 }
@@ -121,7 +132,8 @@ BurstNodeApp::SlotLoop (void)
 {
   if (!m_isBurst) return;
 
-  // Check for assignment
+  // Check for assignment from the scheduler. If not assigned yet, schedule
+  // another check shortly. When assigned, align to the next superframe tick.
   if (m_assignedSlot == UINT32_MAX)
     {
       uint32_t slot = m_scheduler->GetAssignedSlot (m_nodeId);
@@ -133,7 +145,7 @@ BurstNodeApp::SlotLoop (void)
           Simulator::ScheduleNow (&BurstNodeApp::SuperframeTick, this);
           return;
         }
-      // Retry later
+      // Retry later if still unassigned
       m_slotEvent = Simulator::Schedule (Seconds (0.1), &BurstNodeApp::SlotLoop, this);
     }
 }
@@ -143,16 +155,14 @@ BurstNodeApp::SuperframeTick (void)
 {
   if (!m_isBurst) return;
 
-  // Class-B Beacon Synchronization Logic
-  // We assume Superframe starts NOW.
-  // Calculate Tx Time = Now + Slot * Duration
-  
+  // Compute the offset within the superframe for the assigned slot and
+  // schedule a SendInSlot at that time. Then schedule the next superframe.
   Time offset = m_burstInterval * m_assignedSlot;
   
   // Schedule transmission in this slot
   Simulator::Schedule (offset, &BurstNodeApp::SendInSlot, this);
   
-  // Schedule next Superframe
+  // Schedule next Superframe tick
   m_slotEvent = Simulator::Schedule (m_superframeDuration, &BurstNodeApp::SuperframeTick, this);
 }
 

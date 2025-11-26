@@ -1,3 +1,8 @@
+// File: burst-mac-tag.h
+// Purpose: Small packet tag used to mark burst packets and carry a simple
+// control payload (sender id and assigned slot). The tag is used by both
+// node-side apps and the scheduler/server-side logic.
+
 #ifndef BURST_MAC_TAG_H
 #define BURST_MAC_TAG_H
 
@@ -8,7 +13,7 @@ namespace ns3 {
 
 /**
  * @brief Tag used to carry Burst-MAC control information.
- * 
+ *
  * Fields:
  * - IsBurst: True if the packet is part of a burst.
  * - SourceNodeId: The ID of the sender (for server identification).
@@ -25,9 +30,11 @@ public:
   void Deserialize (TagBuffer i) override;
   void Print (std::ostream &os) const override;
 
+  // flag helpers
   void set_burst (bool b);
   bool is_burst (void) const;
 
+  // source and slot helpers
   void set_src (uint32_t id);
   uint32_t src (void) const;
 

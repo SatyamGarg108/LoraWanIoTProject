@@ -1,3 +1,9 @@
+// File: burst-node-app.h
+// Purpose: Application that runs on end devices to support Burst-MAC behavior.
+// It manages normal vs burst transmission modes, sends a registration packet
+// when entering burst mode, polls the scheduler for slot assignments and
+// transmits in assigned slots (superframe semantics).
+
 #ifndef BURST_NODE_APP_H
 #define BURST_NODE_APP_H
 
@@ -10,11 +16,11 @@ namespace ns3 {
 
 /**
  * @brief Application for Burst-MAC End Device.
- * 
+ *
  * Implements:
  * - Mode Switching (Normal <-> Burst)
  * - Burst Detection (Trigger)
- * - Class-B Synchronization (Superframe)
+ * - Class-B-like Synchronization (Superframe)
  * - Slot-based Transmission
  */
 class BurstNodeApp : public Application
@@ -49,23 +55,28 @@ protected:
   virtual void StopApplication (void);
 
 private:
+  // Core behavior methods
   void SendPacket (void);
   void ScheduleNextTx (void);
   void SlotLoop (void);
   void SuperframeTick (void);
   void SendInSlot (void);
 
+  // Pointers to MAC and scheduler
   Ptr<lorawan::EndDeviceLorawanMac> m_mac;
   Ptr<BurstScheduler> m_scheduler;
   
+  // Timing parameters
   Time m_normalInterval;
   Time m_burstInterval; // Used as Slot Duration in Burst Mode
   Time m_superframeDuration;
   
+  // State
   bool m_isBurst;
   uint32_t m_nodeId;
   uint32_t m_assignedSlot;
   
+  // Events used to schedule transmissions and polling
   EventId m_sendEvent;
   EventId m_slotEvent;
   

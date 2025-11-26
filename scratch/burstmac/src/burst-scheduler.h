@@ -1,3 +1,10 @@
+// File: burst-scheduler.h
+// Purpose: Very small centralized scheduler used in the Burst-MAC prototype.
+// The scheduler groups nodes by a simple VirtualChannel key (data rate + freq)
+// and assigns incremental slots to nodes that send a registration (uplink)
+// packet marked as a burst. This is intentionally lightweight for example
+// and teaching purposes.
+
 #ifndef BURST_SCHEDULER_H
 #define BURST_SCHEDULER_H
 
@@ -24,6 +31,10 @@ struct VirtualChannel {
 
 /**
  * @brief State of a Virtual Channel.
+ *
+ * Holds the list of observed node ids that declared a burst and a mapping
+ * of assigned slots. `nextFreeSlot` is used to give new arriving nodes a
+ * unique slot index (simple incremental allocation).
  */
 struct VCState {
   std::vector<uint32_t> nodeIds;
@@ -33,11 +44,11 @@ struct VCState {
 
 /**
  * @brief Centralized Scheduler for Burst-MAC.
- * 
+ *
  * Handles:
  * - Virtual Channel Grouping
- * - Hash-based Slot Scheduling
- * - Collision Resolution
+ * - Hash-based Slot Scheduling (simple incremental assignment here)
+ * - Exposes a lookup API so nodes can query their assigned slot.
  */
 class BurstScheduler : public Object
 {
@@ -54,7 +65,7 @@ public:
   uint32_t GetAssignedSlot (uint32_t nodeId);
 
 private:
-  std::map<VirtualChannel, VCState> vc_map; // not fancy name
+  std::map<VirtualChannel, VCState> vc_map; // virtual-channel -> state
   std::map<uint32_t, uint32_t> node_slot_map; // node -> slot
 };
 

@@ -1,3 +1,16 @@
+#/*******************************************************************************
+#  burstmac-simulation.cc
+#
+#  Example simulation that demonstrates the Burst-MAC prototype. The file
+#  builds a simple LoRaWAN network (end devices + gateways + network server)
+#  and hooks a small centralized `BurstScheduler` plus `BurstNodeApp` instances
+#  on each end device to emulate bursty traffic using slot assignments.
+#
+#  To run (from ns-3 workspace):
+#    ./ns3 run "burstmac-simulation --nNodes=200 --burstPercent=50"
+#
+#*******************************************************************************/
+
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/lorawan-module.h"
@@ -16,9 +29,12 @@ using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE ("BurstMacSimulation");
 
-// Global pointer to scheduler for the callback
+// Global pointer to scheduler for the callback (kept global for easy access
+// from the network-server trace callback in this small example).
 Ptr<BurstScheduler> g_scheduler;
 
+// Callback invoked by the NetworkServer when it receives an uplink packet.
+// The scheduler inspects burst-related tags and may assign slots.
 void
 OnServerReceivedPacket (Ptr<const Packet> packet)
 {
@@ -54,6 +70,7 @@ main (int argc, char *argv[])
   LogComponentEnable ("BurstNodeApp", LOG_LEVEL_INFO);
 
   // 1. Mobility & Channel
+  // Set up node positions and a simple propagation model used by the Lora PHY.
   MobilityHelper mobility;
   mobility.SetPositionAllocator ("ns3::UniformDiscPositionAllocator",
                                  "rho", DoubleValue (radius),
