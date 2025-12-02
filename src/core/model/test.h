@@ -7,7 +7,6 @@
 #ifndef NS3_TEST_H
 #define NS3_TEST_H
 
-#include "deprecated.h"
 #include "system-wall-clock-ms.h"
 
 #include <fstream>
@@ -1045,6 +1044,9 @@ class TestRunnerImpl;
  * method, and use the NS_TEST_* macros within DoRun.
  *
  * @see sample-test-suite.cc
+ *
+ * Inheritance graph was not generated because of its size.
+ * @hideinheritancegraph
  */
 class TestCase
 {
@@ -1058,32 +1060,22 @@ class TestCase
     };
 
     /**
-     * Deprecated test duration simple enums.
-     *
-     * Use the `TestCase::Duration` enum class symbols instead.
-     * @{
-     */
-    NS_DEPRECATED_3_42("Use Duration::QUICK instead")
-    static constexpr auto QUICK = Duration::QUICK;
-    NS_DEPRECATED_3_42("Use Duration::EXTENSIVE instead")
-    static constexpr auto EXTENSIVE = Duration::EXTENSIVE;
-    NS_DEPRECATED_3_42("Use Duration::TAKES_FOREVER instead")
-    static constexpr auto TAKES_FOREVER = Duration::TAKES_FOREVER;
-
-    using TestDuration NS_DEPRECATED_3_42("Use Duration instead") = Duration;
-    /**@}*/
-
-    /**
      *  Destructor
      */
     virtual ~TestCase();
 
     // Delete copy constructor and assignment operator to avoid misuse
+
+    // Doxygen erroneously attributes all TestCases to this c'tor,
+    // hence we have to hide the caller graph
+    /** @hidecaller */
     TestCase(const TestCase&) = delete;
+
     TestCase& operator=(const TestCase&) = delete;
 
     /**
      * @return The name of this test
+     * @hidecaller
      */
     std::string GetName() const;
 
@@ -1092,6 +1084,7 @@ class TestCase
      * @brief Constructor.
      *
      * @param [in] name The name of the new TestCase created
+     * @hidecaller
      */
     TestCase(std::string name);
 
@@ -1101,6 +1094,7 @@ class TestCase
      * @param [in] testCase Pointer to the TestCase object to be added.
      * @param [in] duration Amount of time this test takes to execute
      *             (defaults to QUICK).
+     * @hidecaller
      */
     void AddTestCase(TestCase* testCase, Duration duration = Duration::QUICK);
 
@@ -1262,6 +1256,9 @@ class TestCase
  * @brief A suite of tests to run.
  *
  * @see sample-test-suite.cc
+ *
+ * Inheritance graph was not generated because of its size.
+ * @hideinheritancegraph
  */
 class TestSuite : public TestCase
 {
@@ -1280,28 +1277,11 @@ class TestSuite : public TestCase
     };
 
     /**
-     * Deprecated test type simple enums.
-     *
-     * Use the `TestSuite::Type` enum class symbols instead.
-     * @{
-     */
-    NS_DEPRECATED_3_42("Use Type::ALL instead")
-    static constexpr auto ALL = Type::ALL;
-    NS_DEPRECATED_3_42("Use Type::UNIT instead")
-    static constexpr auto UNIT = Type::UNIT;
-    NS_DEPRECATED_3_42("Use Type::SYSTEM instead")
-    static constexpr auto SYSTEM = Type::SYSTEM;
-    NS_DEPRECATED_3_42("Use Type::EXAMPLE instead")
-    static constexpr auto EXAMPLE = Type::EXAMPLE;
-    NS_DEPRECATED_3_42("Use Type::PERFORMANCE instead")
-    static constexpr auto PERFORMANCE = Type::PERFORMANCE;
-    /**@}*/
-
-    /**
      * @brief Construct a new test suite.
      *
      * @param [in] name The name of the test suite.
      * @param [in] type The TestType of the test suite (defaults to UNIT test).
+     * @hidecaller
      */
     TestSuite(std::string name, Type type = Type::UNIT);
 

@@ -127,7 +127,8 @@ class MuRtsCtsSpectrumWifiPhy : public SpectrumWifiPhy
     void SetMuRtsTxVector(const WifiTxVector& muRtsTxVector);
 
   private:
-    Ptr<MuRtsCtsHePhy> m_muRtsCtsHePhy; ///< Pointer to HE PHY instance used for MU-RTS/CTS PHY test
+    std::shared_ptr<MuRtsCtsHePhy>
+        m_muRtsCtsHePhy; ///< Pointer to HE PHY instance used for MU-RTS/CTS PHY test
 
     // end of class MuRtsCtsSpectrumWifiPhy
 };
@@ -144,7 +145,7 @@ MuRtsCtsSpectrumWifiPhy::MuRtsCtsSpectrumWifiPhy()
     : SpectrumWifiPhy()
 {
     NS_LOG_FUNCTION(this);
-    m_muRtsCtsHePhy = Create<MuRtsCtsHePhy>();
+    m_muRtsCtsHePhy = std::make_shared<MuRtsCtsHePhy>();
     m_muRtsCtsHePhy->SetOwner(this);
 }
 
@@ -330,7 +331,7 @@ TestNonHtDuplicatePhyReception::SendNonHtDuplicatePpdu(MHz_u channelWidth)
 {
     NS_LOG_FUNCTION(this << channelWidth);
     WifiTxVector txVector = WifiTxVector(OfdmPhy::GetOfdmRate24Mbps(),
-                                         0,
+                                         WIFI_MIN_TX_PWR_LEVEL,
                                          WIFI_PREAMBLE_LONG,
                                          NanoSeconds(800),
                                          1,
@@ -743,7 +744,7 @@ TestMultipleCtsResponsesFromMuRts::TxNonHtDuplicateCts(std::size_t phyIndex)
 
     WifiTxVector txVector =
         WifiTxVector(OfdmPhy::GetOfdmRate54Mbps(), // use less robust modulation for test purpose
-                     0,
+                     WIFI_MIN_TX_PWR_LEVEL,
                      WIFI_PREAMBLE_LONG,
                      NanoSeconds(800),
                      1,

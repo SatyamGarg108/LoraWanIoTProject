@@ -12,15 +12,10 @@
 #include "fatal-error.h"
 #include "string.h"
 
-#include "ns3/core-config.h"
-
 #include <algorithm> // transform
-#include <cstring>   // strlen
+#include <ctype.h>   // toupper
 #include <iostream>
-#include <list>
-#include <locale> // toupper
 #include <map>
-#include <numeric> // accumulate
 #include <stdexcept>
 #include <utility>
 
@@ -230,13 +225,6 @@ LogComponent::EnvVarCheck()
         pre_pipe = false;
     }
     Enable((LogLevel)level);
-}
-
-bool
-LogComponent::IsEnabled(const LogLevel level) const
-{
-    //  LogComponentEnableEnvVar ();
-    return level & m_levels;
 }
 
 bool

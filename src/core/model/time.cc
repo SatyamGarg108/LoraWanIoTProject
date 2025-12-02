@@ -11,8 +11,7 @@
 #include "log.h"
 #include "nstime.h"
 
-#include <cmath>   // pow
-#include <iomanip> // showpos
+#include <cmath> // pow
 #include <mutex>
 #include <sstream>
 
@@ -181,7 +180,7 @@ Time::Time(const std::string& s)
         *this = Time::FromDouble(v, Time::S);
     }
 
-    if (g_markingTimes)
+    if (MarkingTimes())
     {
         Mark(this);
     }
@@ -278,6 +277,12 @@ Time::SetResolution(Unit unit, Resolution* resolution, const bool convert /* = t
         }
     }
     resolution->unit = unit;
+}
+
+bool
+Time::MarkingTimes()
+{
+    return (g_markingTimes != nullptr);
 }
 
 // static

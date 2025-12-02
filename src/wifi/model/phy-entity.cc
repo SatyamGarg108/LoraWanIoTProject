@@ -15,13 +15,16 @@
 #include "interference-helper.h"
 #include "preamble-detection-model.h"
 #include "spectrum-wifi-phy.h"
+#include "wifi-net-device.h"
 #include "wifi-psdu.h"
+#include "wifi-radio-energy-model.h"
 #include "wifi-spectrum-signal-parameters.h"
 #include "wifi-utils.h"
 
 #include "ns3/assert.h"
 #include "ns3/data-rate.h"
 #include "ns3/log.h"
+#include "ns3/mobility-model.h"
 #include "ns3/packet.h"
 #include "ns3/simulator.h"
 
@@ -212,7 +215,7 @@ PhyEntity::GetAddressedPsduInPpdu(Ptr<const WifiPpdu> ppdu) const
     return ppdu->GetPsdu();
 }
 
-PhyEntity::PhyHeaderSections
+PhyHeaderSections
 PhyEntity::GetPhyHeaderSections(const WifiTxVector& txVector, Time ppduStart) const
 {
     PhyHeaderSections map;
@@ -257,7 +260,7 @@ PhyEntity::GetDurationUpToField(WifiPpduField field, const WifiTxVector& txVecto
         .first; // return the start time of field relatively to the beginning of the PPDU
 }
 
-PhyEntity::SnrPer
+SnrPer
 PhyEntity::GetPhyHeaderSnrPer(WifiPpduField field, Ptr<Event> event) const
 {
     const auto measurementChannelWidth = GetMeasurementChannelWidth(event->GetPpdu());
@@ -1323,12 +1326,7 @@ PhyEntity::GetDelayUntilCcaEnd(dBm_u threshold, const WifiSpectrumBandInfo& band
 void
 PhyEntity::SwitchMaybeToCcaBusy(const Ptr<const WifiPpdu> ppdu)
 {
-    // We are here because we have received the first bit of a packet and we are
-    // not going to be able to synchronize on it
-    // In this model, CCA becomes busy when the aggregation of all signals as
-    // tracked by the InterferenceHelper class is higher than the CcaBusyThreshold
-    const auto ccaIndication = GetCcaIndication(ppdu);
-    if (ccaIndication.has_value())
+    if (const auto ccaIndication = GetCcaIndication(ppdu))
     {
         NS_LOG_DEBUG("CCA busy for " << ccaIndication.value().second << " during "
                                      << ccaIndication.value().first.As(Time::S));
@@ -1337,9 +1335,17 @@ PhyEntity::SwitchMaybeToCcaBusy(const Ptr<const WifiPpdu> ppdu)
                                       {});
         return;
     }
+
     if (ppdu)
     {
-        SwitchMaybeToCcaBusy(nullptr);
+        SwitchMaybeToCcaBusy();
+        return;
+    }
+
+    if (m_wifiPhy->IsStateCcaBusy())
+    {
+        NS_LOG_DEBUG("Update CCA indication to IDLE");
+        m_state->SwitchMaybeToCcaBusy(Seconds(0), WIFI_CHANLIST_PRIMARY, {});
     }
 }
 

@@ -273,7 +273,8 @@ class MuMimoSpectrumWifiPhy : public SpectrumWifiPhy
     void DoInitialize() override;
     void DoDispose() override;
 
-    Ptr<MuMimoTestHePhy> m_ofdmTestHePhy; ///< Pointer to HE PHY instance used for MU-MIMO test
+    std::shared_ptr<MuMimoTestHePhy>
+        m_ofdmTestHePhy; ///< Pointer to HE PHY instance used for MU-MIMO test
 
     // end of class MuMimoSpectrumWifiPhy
 };
@@ -289,7 +290,7 @@ MuMimoSpectrumWifiPhy::GetTypeId()
 MuMimoSpectrumWifiPhy::MuMimoSpectrumWifiPhy(uint16_t staId)
     : SpectrumWifiPhy()
 {
-    m_ofdmTestHePhy = Create<MuMimoTestHePhy>(staId);
+    m_ofdmTestHePhy = std::make_shared<MuMimoTestHePhy>(staId);
     m_ofdmTestHePhy->SetOwner(this);
 }
 
@@ -534,7 +535,7 @@ TestDlMuMimoPhyTransmission::SendMuPpdu(const std::vector<StaInfo>& staInfos)
     NS_ASSERT(staInfos.size() > 1);
 
     WifiTxVector txVector = WifiTxVector(HePhy::GetHeMcs7(),
-                                         0,
+                                         WIFI_MIN_TX_PWR_LEVEL,
                                          WIFI_PREAMBLE_HE_MU,
                                          NanoSeconds(800),
                                          1,
@@ -1288,7 +1289,7 @@ TestUlMuMimoPhyTransmission::SendHeSuPpdu(uint16_t txStaId,
     WifiConstPsduMap psdus;
 
     WifiTxVector txVector = WifiTxVector(HePhy::GetHeMcs7(),
-                                         0,
+                                         WIFI_MIN_TX_PWR_LEVEL,
                                          WIFI_PREAMBLE_HE_SU,
                                          NanoSeconds(800),
                                          1,
@@ -1323,7 +1324,7 @@ TestUlMuMimoPhyTransmission::GetTxVectorForHeTbPpdu(uint16_t txStaId,
                                                     uint8_t bssColor) const
 {
     WifiTxVector txVector = WifiTxVector(HePhy::GetHeMcs7(),
-                                         0,
+                                         WIFI_MIN_TX_PWR_LEVEL,
                                          WIFI_PREAMBLE_HE_TB,
                                          NanoSeconds(1600),
                                          1,
@@ -1347,7 +1348,7 @@ void
 TestUlMuMimoPhyTransmission::SetTrigVector(const std::vector<uint16_t>& staIds, uint8_t bssColor)
 {
     WifiTxVector txVector(HePhy::GetHeMcs7(),
-                          0,
+                          WIFI_MIN_TX_PWR_LEVEL,
                           WIFI_PREAMBLE_HE_TB,
                           NanoSeconds(1600),
                           1,
@@ -1373,7 +1374,7 @@ TestUlMuMimoPhyTransmission::SetTrigVector(const std::vector<uint16_t>& staIds, 
                                                    txVector,
                                                    m_phyAp->GetPhyBand());
     txVector.SetLength(length);
-    auto hePhyAp = DynamicCast<HePhy>(m_phyAp->GetPhyEntity(WIFI_MOD_CLASS_HE));
+    auto hePhyAp = std::dynamic_pointer_cast<HePhy>(m_phyAp->GetPhyEntity(WIFI_MOD_CLASS_HE));
     hePhyAp->SetTrigVector(txVector, m_expectedPpduDuration);
 }
 

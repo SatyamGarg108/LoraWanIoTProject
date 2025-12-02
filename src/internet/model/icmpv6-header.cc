@@ -856,8 +856,8 @@ Icmpv6Redirection::GetInstanceTypeId() const
 }
 
 Icmpv6Redirection::Icmpv6Redirection()
-    : m_target(Ipv6Address("")),
-      m_destination(Ipv6Address("")),
+    : m_target(Ipv6Address::GetAny()),
+      m_destination(Ipv6Address::GetAny()),
       m_reserved(0)
 {
     NS_LOG_FUNCTION(this);
@@ -2044,6 +2044,7 @@ Icmpv6OptionLinkLayerAddress::Deserialize(Buffer::Iterator start)
     NS_ASSERT(GetLength() * 8 <= 32 + 2);
     i.Read(mac, (GetLength() * 8) - 2);
 
+    m_addr.SetType("MacAddress", (GetLength() * 8) - 2);
     m_addr.CopyFrom(mac, (GetLength() * 8) - 2);
 
     return GetSerializedSize();

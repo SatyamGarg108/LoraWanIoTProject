@@ -13,7 +13,6 @@
 #include "fatal-error.h"
 #include "log.h"
 
-#include <cstdlib>
 #include <iostream>
 
 /**
@@ -98,7 +97,7 @@ const Matrix A2p0 = {
  * \param [in] s Second multiplicative argument.
  * \param [in] c Additive argument.
  * \param [in] m Modulus.
- * \returns <tt>(a*s +c) MOD m</tt>
+ * \returns ``(a*s +c) MOD m``
  */
 double MultModM (double a, double s, double c, double m)
 {

@@ -19,6 +19,7 @@
 #include "object.h"
 #include "type-id.h"
 
+#include <limits>
 #include <map>
 #include <stdint.h>
 
@@ -978,8 +979,8 @@ class WeibullRandomVariable : public RandomVariableStream
 class NormalRandomVariable : public RandomVariableStream
 {
   public:
-    /** Large constant to bound the range. */
-    static const double INFINITE_VALUE;
+    /// Large constant to bound the range.
+    static constexpr double INFINITE_VALUE = std::numeric_limits<double>::max();
 
     /**
      * @brief Register this type.
@@ -1006,6 +1007,13 @@ class NormalRandomVariable : public RandomVariableStream
     double GetVariance() const;
 
     /**
+     * @brief Returns the standard deviation value for the normal distribution returned by this RNG
+     * stream.
+     * @return The standard deviation value for the normal distribution returned by this RNG stream.
+     */
+    double GetStdDev() const;
+
+    /**
      * @brief Returns the bound on values that can be returned by this RNG stream.
      * @return The bound on values that can be returned by this RNG stream.
      */
@@ -1023,6 +1031,14 @@ class NormalRandomVariable : public RandomVariableStream
 
     /** @copydoc GetValue(double,double,double) */
     uint32_t GetInteger(uint32_t mean, uint32_t variance, uint32_t bound);
+
+    /**
+     * Set standard deviation of this normal distribution RNG stream.
+     * The deviation is squared and stored as variance, which can also be set
+     * via the variance attribute.
+     * @param [in] stdDev Standard deviation value for the normal distribution.
+     */
+    void SetStdDev(double stdDev);
 
     // Inherited
     double GetValue() override;

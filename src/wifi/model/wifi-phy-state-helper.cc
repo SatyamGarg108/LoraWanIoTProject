@@ -51,7 +51,7 @@ WifiPhyStateHelper::GetTypeId()
                 MakeTraceSourceAccessor(&WifiPhyStateHelper::m_rxOutcomeTrace),
                 "ns3::WifiPhyStateHelper::RxOutcomeTracedCallback")
             .AddTraceSource("RxError",
-                            "A packet has been received unsuccessfuly.",
+                            "A packet has been received unsuccessfully.",
                             MakeTraceSourceAccessor(&WifiPhyStateHelper::m_rxErrorTrace),
                             "ns3::WifiPhyStateHelper::RxEndErrorTracedCallback")
             .AddTraceSource("Tx",
@@ -526,7 +526,7 @@ WifiPhyStateHelper::SwitchMaybeToCcaBusy(Time duration,
     {
         m_startCcaBusy = now;
     }
-    m_endCcaBusy = std::max(m_endCcaBusy, now + duration);
+    m_endCcaBusy = now + duration;
 }
 
 void

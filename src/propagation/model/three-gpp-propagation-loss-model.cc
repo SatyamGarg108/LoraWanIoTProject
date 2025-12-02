@@ -263,9 +263,6 @@ NS_LOG_COMPONENT_DEFINE("ThreeGppPropagationLossModel");
 
 NS_OBJECT_ENSURE_REGISTERED(ThreeGppPropagationLossModel);
 
-std::function<Ptr<MobilityModel>(Ptr<const MobilityModel>, Ptr<const MobilityModel>)>
-    ThreeGppPropagationLossModel::m_doCalcRxPowerPrologueFunction;
-
 TypeId
 ThreeGppPropagationLossModel::GetTypeId()
 {
@@ -301,7 +298,13 @@ ThreeGppPropagationLossModel::GetTypeId()
                 "Enable/disable Building Penetration Losses.",
                 BooleanValue(true),
                 MakeBooleanAccessor(&ThreeGppPropagationLossModel::m_buildingPenLossesEnabled),
-                MakeBooleanChecker());
+                MakeBooleanChecker())
+            .AddAttribute("MeanVehicularLoss",
+                          "9dB for standard cars, 20dB for cars with "
+                          "metal coated glass panels.",
+                          DoubleValue(9),
+                          MakeDoubleAccessor(&ThreeGppPropagationLossModel::m_meanVehicleO2iLoss),
+                          MakeDoubleChecker<double>());
     return tid;
 }
 
@@ -320,11 +323,15 @@ ThreeGppPropagationLossModel::ThreeGppPropagationLossModel()
 
     m_normalO2iLowLossVar = CreateObject<NormalRandomVariable>();
     m_normalO2iLowLossVar->SetAttribute("Mean", DoubleValue(0));
-    m_normalO2iLowLossVar->SetAttribute("Variance", DoubleValue(4.4));
+    m_normalO2iLowLossVar->SetStdDev(4.4);
 
     m_normalO2iHighLossVar = CreateObject<NormalRandomVariable>();
     m_normalO2iHighLossVar->SetAttribute("Mean", DoubleValue(0));
-    m_normalO2iHighLossVar->SetAttribute("Variance", DoubleValue(6.5));
+    m_normalO2iHighLossVar->SetStdDev(6.5);
+
+    m_normalO2iVehicularLossVar = CreateObject<NormalRandomVariable>();
+    // mean is set via an attribute, so must be set in NotifyConstructionCompleted
+    m_normalO2iVehicularLossVar->SetStdDev(5);
 }
 
 ThreeGppPropagationLossModel::~ThreeGppPropagationLossModel()
@@ -338,6 +345,12 @@ ThreeGppPropagationLossModel::DoDispose()
     m_channelConditionModel->Dispose();
     m_channelConditionModel = nullptr;
     m_shadowingMap.clear();
+}
+
+void
+ThreeGppPropagationLossModel::NotifyConstructionCompleted()
+{
+    m_normalO2iVehicularLossVar->SetAttribute("Mean", DoubleValue(m_meanVehicleO2iLoss));
 }
 
 void
@@ -378,18 +391,10 @@ ThreeGppPropagationLossModel::IsO2iLowPenetrationLoss(Ptr<const ChannelCondition
 
 double
 ThreeGppPropagationLossModel::DoCalcRxPower(double txPowerDbm,
-                                            Ptr<MobilityModel> c,
+                                            Ptr<MobilityModel> a,
                                             Ptr<MobilityModel> b) const
 {
     NS_LOG_FUNCTION(this);
-
-    // if there is a prologue function installed, call it and replace the transmitter mobility model
-    auto a = m_doCalcRxPowerPrologueFunction ? m_doCalcRxPowerPrologueFunction(b, c) : c;
-    if (a->GetPosition() != c->GetPosition())
-    {
-        NS_LOG_DEBUG("Prologue function replaced source position "
-                     << c->GetPosition() << " with position " << a->GetPosition());
-    }
 
     // check if the model is initialized
     NS_ASSERT_MSG(m_frequency != 0.0, "First set the centre frequency");
@@ -412,15 +417,25 @@ ThreeGppPropagationLossModel::DoCalcRxPower(double txPowerDbm,
          (cond->GetO2iCondition() == ChannelCondition::O2iConditionValue::I2I &&
           cond->GetLosCondition() == ChannelCondition::LosConditionValue::NLOS)))
     {
-        if (IsO2iLowPenetrationLoss(cond))
+        if (m_frequency < 6e9)
         {
-            rxPow -= GetO2iLowPenetrationLoss(a, b, cond->GetLosCondition());
+            // TR 38.901 has a backward compatibility O2I penetration loss for sub 6GHz channels
+            rxPow -= GetO2iSub6GhzPenetrationLoss(a, b, cond->GetLosCondition());
         }
         else
         {
-            rxPow -= GetO2iHighPenetrationLoss(a, b, cond->GetLosCondition());
+            if (IsO2iLowPenetrationLoss(cond))
+            {
+                rxPow -= GetO2iLowPenetrationLoss(a, b, cond->GetLosCondition());
+            }
+            else
+            {
+                rxPow -= GetO2iHighPenetrationLoss(a, b, cond->GetLosCondition());
+            }
         }
     }
+
+    rxPow -= GetO2iVehicularLoss(a, b, cond->GetO2iCondition());
 
     return rxPow;
 }
@@ -449,6 +464,69 @@ ThreeGppPropagationLossModel::GetLoss(Ptr<ChannelCondition> cond,
     }
 
     return loss;
+}
+
+double
+ThreeGppPropagationLossModel::GetO2iSub6GhzPenetrationLoss(
+    Ptr<MobilityModel> a,
+    Ptr<MobilityModel> b,
+    ChannelCondition::LosConditionValue cond) const
+{
+    NS_LOG_FUNCTION(this);
+
+    double o2iLossValue = 0;
+    double lossTw = 0;
+    double lossIn = 0;
+    double lossNormalVariate = 0;
+
+    // compute the channel key
+    uint32_t key = GetKey(a, b);
+
+    bool notFound = false;     // indicates if the o2iLoss value has not been computed yet
+    bool newCondition = false; // indicates if the channel condition has changed
+
+    auto it = m_o2iLossMap.end(); // the o2iLoss map iterator
+    if (m_o2iLossMap.find(key) != m_o2iLossMap.end())
+    {
+        // found the o2iLoss value in the map
+        it = m_o2iLossMap.find(key);
+        newCondition = (it->second.m_condition != cond); // true if the condition changed
+    }
+    else
+    {
+        notFound = true;
+        // add a new entry in the map and update the iterator
+        O2iLossMapItem newItem;
+        it = m_o2iLossMap.insert(it, std::make_pair(key, newItem));
+    }
+
+    if (notFound || newCondition)
+    {
+        // distance2dIn is a single, link-specific, uniformly distributed variable
+        // between 0 and 25 m for UMa and UMi-Street Canyon.
+        double distance2dIn = GetO2iDistance2dInSub6Ghz();
+
+        // calculate penetration losses, see TR 38.901 Table 7.4.3-3
+        lossTw = 20;
+
+        // calculate indoor loss
+        lossIn = 0.5 * distance2dIn;
+
+        // calculate low loss standard deviation
+        lossNormalVariate = 0;
+
+        o2iLossValue = lossTw + lossIn + lossNormalVariate;
+
+        // update the entry in the map
+        it->second.m_o2iLoss = o2iLossValue;
+        it->second.m_condition = cond;
+    }
+    else
+    {
+        o2iLossValue = it->second.m_o2iLoss;
+    }
+
+    return o2iLossValue;
 }
 
 double
@@ -508,15 +586,15 @@ ThreeGppPropagationLossModel::GetO2iLowPenetrationLoss(
         lowlossNormalVariate = m_normalO2iLowLossVar->GetValue();
 
         o2iLossValue = lowLossTw + lossIn + lowlossNormalVariate;
+
+        // update the entry in the map
+        it->second.m_o2iLoss = o2iLossValue;
+        it->second.m_condition = cond;
     }
     else
     {
         o2iLossValue = it->second.m_o2iLoss;
     }
-
-    // update the entry in the map
-    it->second.m_o2iLoss = o2iLossValue;
-    it->second.m_condition = cond;
 
     return o2iLossValue;
 }
@@ -580,15 +658,15 @@ ThreeGppPropagationLossModel::GetO2iHighPenetrationLoss(
         highlossNormalVariate = m_normalO2iHighLossVar->GetValue();
 
         o2iLossValue = highLossTw + lossIn + highlossNormalVariate;
+
+        // update the entry in the map
+        it->second.m_o2iLoss = o2iLossValue;
+        it->second.m_condition = cond;
     }
     else
     {
         o2iLossValue = it->second.m_o2iLoss;
     }
-
-    // update the entry in the map
-    it->second.m_o2iLoss = o2iLossValue;
-    it->second.m_condition = cond;
 
     return o2iLossValue;
 }
@@ -685,8 +763,8 @@ ThreeGppPropagationLossModel::DoAssignStreams(int64_t stream)
     m_randomO2iVar2->SetStream(stream + 2);
     m_normalO2iLowLossVar->SetStream(stream + 3);
     m_normalO2iHighLossVar->SetStream(stream + 4);
-
-    return 5;
+    m_normalO2iVehicularLossVar->SetStream(stream + 5);
+    return 6;
 }
 
 double
@@ -727,6 +805,67 @@ ThreeGppPropagationLossModel::GetVectorDifference(Ptr<MobilityModel> a, Ptr<Mobi
     {
         return a->GetPosition() - b->GetPosition();
     }
+}
+
+double
+ThreeGppPropagationLossModel::GetO2iDistance2dInSub6Ghz() const
+{
+    return 0;
+}
+
+void
+ThreeGppPropagationLossModel::ClearO2iLossCacheMap()
+{
+    NS_LOG_FUNCTION(this);
+    m_o2iLossMap.clear();
+    m_o2iVehicularUtLossMap.clear();
+}
+
+double
+ThreeGppPropagationLossModel::GetO2iVehicularLoss(Ptr<MobilityModel> a,
+                                                  Ptr<MobilityModel> b,
+                                                  ChannelCondition::O2iConditionValue cond) const
+{
+    NS_LOG_FUNCTION(this);
+    double o2iVehicularLoss = 0.0;
+
+    // O2I penetration loss for vehicles only applies between 600 MHz and 60 GHz.
+    if (m_frequency >= 0.6e9 && m_frequency < 60e9)
+    {
+        for (const auto& mob : {a, b})
+        {
+            auto velocityKmH = mob->GetVelocity().GetLength() * 3.6;
+            auto idNode = mob->GetObject<Node>()->GetId();
+            // Slow nodes are considered as pedestrians (no loss)
+            if (velocityKmH < 30)
+            {
+                m_o2iVehicularUtLossMap[idNode] = 0.0;
+            }
+            // Fast nodes are considered vehicles.
+            // Create one loss per terminal, and reuse throughout simulation.
+            else if (velocityKmH >= 30 && velocityKmH <= 120)
+            {
+                if (m_o2iVehicularUtLossMap.find(idNode) == m_o2iVehicularUtLossMap.end())
+                {
+                    m_o2iVehicularUtLossMap[idNode] = m_normalO2iVehicularLossVar->GetValue();
+                }
+            }
+            // Very fast nodes are not modeled
+            else
+            {
+                m_o2iVehicularUtLossMap[idNode] = 0.0;
+                NS_LOG_WARN(
+                    "O2I loss for high-speed (>120 km/h) transit and satellites not implemented");
+            }
+
+            // Sum vehicle individual losses
+            if (cond == ChannelCondition::O2iConditionValue::O2O)
+            {
+                o2iVehicularLoss += m_o2iVehicularUtLossMap.at(idNode);
+            }
+        }
+    }
+    return o2iVehicularLoss;
 }
 
 // ------------------------------------------------------------------------- //
@@ -1110,6 +1249,13 @@ ThreeGppUmaPropagationLossModel::GetO2iDistance2dIn() const
 }
 
 double
+ThreeGppUmaPropagationLossModel::GetO2iDistance2dInSub6Ghz() const
+{
+    // distance2dIn is a single, link-specific, uniformly distributed variable between 0 and 25 m.
+    return m_randomO2iVar1->GetValue(0, 25);
+}
+
+double
 ThreeGppUmaPropagationLossModel::GetLossNlos(Ptr<MobilityModel> a, Ptr<MobilityModel> b) const
 {
     NS_LOG_FUNCTION(this);
@@ -1161,20 +1307,25 @@ ThreeGppUmaPropagationLossModel::GetShadowingStd(Ptr<MobilityModel> /* a */,
 {
     NS_LOG_FUNCTION(this);
     double shadowingStd;
-
-    if (cond == ChannelCondition::LosConditionValue::LOS)
+    if (m_frequency < 6e9)
     {
-        shadowingStd = 4.0;
-    }
-    else if (cond == ChannelCondition::LosConditionValue::NLOS)
-    {
-        shadowingStd = 6.0;
+        shadowingStd = 7.0;
     }
     else
     {
-        NS_FATAL_ERROR("Unknown channel condition");
+        if (cond == ChannelCondition::LosConditionValue::LOS)
+        {
+            shadowingStd = 4.0;
+        }
+        else if (cond == ChannelCondition::LosConditionValue::NLOS)
+        {
+            shadowingStd = 6.0;
+        }
+        else
+        {
+            NS_FATAL_ERROR("Unknown channel condition");
+        }
     }
-
     return shadowingStd;
 }
 
@@ -1207,9 +1358,9 @@ ThreeGppUmaPropagationLossModel::DoAssignStreams(int64_t stream)
 {
     NS_LOG_FUNCTION(this);
 
-    m_normRandomVariable->SetStream(stream);
-    m_uniformVar->SetStream(stream + 1);
-    return 2;
+    int64_t streams = ThreeGppPropagationLossModel::DoAssignStreams(stream);
+    m_uniformVar->SetStream(stream + streams);
+    return streams + 1;
 }
 
 // ------------------------------------------------------------------------- //
@@ -1262,6 +1413,13 @@ ThreeGppUmiStreetCanyonPropagationLossModel::GetO2iDistance2dIn() const
     // distance2dIn is minimum of two independently generated uniformly distributed variables
     // between 0 and 25 m for UMa and UMi-Street Canyon. 2D−in d shall be UT-specifically generated.
     return std::min(m_randomO2iVar1->GetValue(0, 25), m_randomO2iVar2->GetValue(0, 25));
+}
+
+double
+ThreeGppUmiStreetCanyonPropagationLossModel::GetO2iDistance2dInSub6Ghz() const
+{
+    // distance2dIn is a single, link-specific, uniformly distributed variable between 0 and 25 m.
+    return m_randomO2iVar1->GetValue(0, 25);
 }
 
 double
@@ -1385,19 +1543,25 @@ ThreeGppUmiStreetCanyonPropagationLossModel::GetShadowingStd(
     NS_LOG_FUNCTION(this);
     double shadowingStd;
 
-    if (cond == ChannelCondition::LosConditionValue::LOS)
+    if (m_frequency < 6e9)
     {
-        shadowingStd = 4.0;
-    }
-    else if (cond == ChannelCondition::LosConditionValue::NLOS)
-    {
-        shadowingStd = 7.82;
+        shadowingStd = 7.0;
     }
     else
     {
-        NS_FATAL_ERROR("Unknown channel condition");
+        if (cond == ChannelCondition::LosConditionValue::LOS)
+        {
+            shadowingStd = 4.0;
+        }
+        else if (cond == ChannelCondition::LosConditionValue::NLOS)
+        {
+            shadowingStd = 7.82;
+        }
+        else
+        {
+            NS_FATAL_ERROR("Unknown channel condition");
+        }
     }
-
     return shadowingStd;
 }
 

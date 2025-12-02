@@ -86,7 +86,8 @@ Inet6SocketAddress::IsMatchingType(const Address& addr)
     return addr.CheckCompatible(GetType(), 18); /* 16 (address) + 2  (port) */
 }
 
-Inet6SocketAddress::operator Address() const
+Inet6SocketAddress::
+operator Address() const
 {
     return ConvertTo();
 }
@@ -118,7 +119,7 @@ uint8_t
 Inet6SocketAddress::GetType()
 {
     NS_LOG_FUNCTION_NOARGS();
-    static uint8_t type = Address::Register();
+    static uint8_t type = Address::Register("IpAddress", 18);
     return type;
 }
 

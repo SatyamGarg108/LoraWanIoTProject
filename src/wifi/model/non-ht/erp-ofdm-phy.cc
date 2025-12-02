@@ -234,7 +234,7 @@ ErpOfdmPhy::IsAllowed(const WifiTxVector& /*txVector*/)
 uint32_t
 ErpOfdmPhy::GetMaxPsduSize() const
 {
-    return 4095;
+    return WIFI_PSDU_MAX_LENGTH;
 }
 
 } // namespace ns3
@@ -252,7 +252,7 @@ class ConstructorErpOfdm
     {
         ns3::ErpOfdmPhy::InitializeModes();
         ns3::WifiPhy::AddStaticPhyEntity(ns3::WIFI_MOD_CLASS_ERP_OFDM,
-                                         ns3::Create<ns3::ErpOfdmPhy>());
+                                         std::make_shared<ns3::ErpOfdmPhy>());
     }
 } g_constructor_erp_ofdm; ///< the constructor for ERP-OFDM modes
 

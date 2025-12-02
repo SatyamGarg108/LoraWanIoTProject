@@ -25,8 +25,6 @@
 
 NS_LOG_COMPONENT_DEFINE("PyViz");
 
-#define NUM_LAST_PACKETS 10
-
 static std::vector<std::string>
 PathSplit(std::string str)
 {
@@ -154,13 +152,6 @@ PyViz::PyViz()
     Config::ConnectFailSafe("/NodeList/*/DeviceList/*/$ns3::PointToPointNetDevice/MacRx",
                             MakeCallback(&PyViz::TraceNetDevRxPointToPoint, this));
 
-    // WiMax
-    Config::ConnectFailSafe("/NodeList/*/DeviceList/*/$ns3::WimaxNetDevice/Tx",
-                            MakeCallback(&PyViz::TraceNetDevTxWimax, this));
-
-    Config::ConnectFailSafe("/NodeList/*/DeviceList/*/$ns3::WimaxNetDevice/Rx",
-                            MakeCallback(&PyViz::TraceNetDevRxWimax, this));
-
     // LTE
     Config::ConnectFailSafe("/NodeList/*/DeviceList/*/$ns3::LteNetDevice/Tx",
                             MakeCallback(&PyViz::TraceNetDevTxLte, this));
@@ -270,7 +261,7 @@ PyViz::CallbackStopSimulation()
     NS_LOG_FUNCTION_NOARGS();
     if (m_runUntil <= Simulator::Now())
     {
-        Simulator::Stop(Seconds(0)); // Stop right now
+        Simulator::Stop(); // Stop right now
         m_stop = true;
     }
 }
@@ -316,6 +307,7 @@ PyViz::SimulatorRunUntil(Time time)
     {
         return;
     }
+
     // Schedule a dummy callback function for the target time, to make
     // sure we stop at the right time.  Otherwise, simulations with few
     // events just appear to "jump" big chunks of time.
@@ -337,6 +329,14 @@ PyViz::SimulatorRunUntil(Time time)
     {
         impl->Run();
     }
+}
+
+Time
+PyViz::GetSimulatorStopTime()
+{
+    Ptr<SimulatorImpl> impl = Simulator::GetImplementation();
+    Ptr<VisualSimulatorImpl> visualImpl = DynamicCast<VisualSimulatorImpl>(impl);
+    return visualImpl->GetStopTime();
 }
 
 bool
@@ -631,7 +631,7 @@ PyViz::TraceNetDevRxCommon(const std::string& context,
     else
     {
         // NS_ASSERT (0);
-        NS_LOG_WARN("Packet has no byte tag; wimax link?");
+        NS_LOG_WARN("Packet has no byte tag");
         uid = packet->GetUid();
     }
 
@@ -794,22 +794,6 @@ PyViz::TraceNetDevPromiscRxCsma(std::string context, Ptr<const Packet> packet)
     {
         TraceNetDevRxCommon(context, packet, ethernetHeader.GetDestination());
     }
-}
-
-void
-PyViz::TraceNetDevTxWimax(std::string context,
-                          Ptr<const Packet> packet,
-                          const Mac48Address& destination)
-{
-    NS_LOG_FUNCTION(context);
-    TraceNetDevTxCommon(context, packet, destination);
-}
-
-void
-PyViz::TraceNetDevRxWimax(std::string context, Ptr<const Packet> packet, const Mac48Address& source)
-{
-    NS_LOG_FUNCTION(context);
-    TraceNetDevRxCommon(context, packet, source);
 }
 
 void

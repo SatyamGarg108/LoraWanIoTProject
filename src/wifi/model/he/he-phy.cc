@@ -992,6 +992,7 @@ HePhy::GetRuBandForTx(const WifiTxVector& txVector, uint16_t staId) const
                             channelWidth,
                             m_wifiPhy->GetOperatingChannel().GetPrimaryChannelIndex(MHz_u{20})),
         mc);
+    NS_ABORT_MSG_IF(group.empty(), "No subcarrier group found");
     // for a TX spectrum, the guard bandwidth is a function of the transmission channel width
     // and the spectrum width equals the transmission channel width (hence bandIndex equals 0)
     const auto indices = ConvertRuSubcarriers({channelWidth,
@@ -1027,6 +1028,7 @@ HePhy::GetRuBandForRx(const WifiTxVector& txVector, uint16_t staId) const
                             channelWidth,
                             m_wifiPhy->GetOperatingChannel().GetPrimaryChannelIndex(MHz_u{20})),
         mc);
+    NS_ABORT_MSG_IF(group.empty(), "No subcarrier group found");
     // for an RX spectrum, the guard bandwidth is a function of the operating channel width
     // and the spectrum width equals the operating channel width
     const auto indices = ConvertRuSubcarriers(
@@ -1116,11 +1118,13 @@ HePhy::GetCcaThreshold(const Ptr<const WifiPpdu> ppdu, WifiChannelListType chann
 }
 
 void
-HePhy::SwitchMaybeToCcaBusy(const Ptr<const WifiPpdu> ppdu)
+HePhy::SwitchMaybeToCcaBusy(const Ptr<const WifiPpdu> ppdu /* = nullptr */)
 {
     NS_LOG_FUNCTION(this);
+
     const auto ccaIndication = GetCcaIndication(ppdu);
     const auto per20MHzDurations = GetPer20MHzDurations(ppdu);
+
     if (ccaIndication.has_value())
     {
         NS_LOG_DEBUG("CCA busy for " << ccaIndication.value().second << " during "
@@ -1128,11 +1132,19 @@ HePhy::SwitchMaybeToCcaBusy(const Ptr<const WifiPpdu> ppdu)
         NotifyCcaBusy(ccaIndication.value().first, ccaIndication.value().second, per20MHzDurations);
         return;
     }
+
     if (ppdu)
     {
-        SwitchMaybeToCcaBusy(nullptr);
+        SwitchMaybeToCcaBusy();
         return;
     }
+
+    // avoid spurious notification if the channel width changed
+    if (m_lastPer20MHzDurations.size() != per20MHzDurations.size())
+    {
+        m_lastPer20MHzDurations.resize(per20MHzDurations.size());
+    }
+
     if (per20MHzDurations != m_lastPer20MHzDurations)
     {
         /*
@@ -1141,6 +1153,12 @@ HePhy::SwitchMaybeToCcaBusy(const Ptr<const WifiPpdu> ppdu)
          */
         NS_LOG_DEBUG("per-20MHz CCA durations changed");
         NotifyCcaBusy(Seconds(0), WIFI_CHANLIST_PRIMARY, per20MHzDurations);
+    }
+
+    if (m_wifiPhy->IsStateCcaBusy())
+    {
+        NS_LOG_DEBUG("Update CCA indication to IDLE");
+        m_state->SwitchMaybeToCcaBusy(Seconds(0), WIFI_CHANLIST_PRIMARY, per20MHzDurations);
     }
 }
 
@@ -1777,7 +1795,7 @@ HePhy::GetWifiConstPsduMap(Ptr<const WifiPsdu> psdu, const WifiTxVector& txVecto
 uint32_t
 HePhy::GetMaxPsduSize() const
 {
-    return 6500631;
+    return WIFI_PSDU_MAX_LENGTH_HE;
 }
 
 bool
@@ -1888,7 +1906,7 @@ class ConstructorHe
     ConstructorHe()
     {
         ns3::HePhy::InitializeModes();
-        ns3::WifiPhy::AddStaticPhyEntity(ns3::WIFI_MOD_CLASS_HE, ns3::Create<ns3::HePhy>());
+        ns3::WifiPhy::AddStaticPhyEntity(ns3::WIFI_MOD_CLASS_HE, std::make_shared<ns3::HePhy>());
     }
 } g_constructor_he; ///< the constructor for HE modes
 

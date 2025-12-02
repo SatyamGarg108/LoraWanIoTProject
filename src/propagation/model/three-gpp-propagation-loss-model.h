@@ -76,24 +76,11 @@ class ThreeGppPropagationLossModel : public PropagationLossModel
     bool IsO2iLowPenetrationLoss(Ptr<const ChannelCondition> cond) const;
 
     /**
-     * @brief Stop-gap solution for wraparound model
-     *
-     * Stop-gap solution for support of wraparound model in the 5G NR module. This
-     * method was introduced for ns-3.45 but will be removed in a future release once
-     * a more general solution is added elsewhere (most likely in the spectrum channel). The
-     * callback method registered here will be executed at the beginning of DoCalcRxPower, and the
-     * returned pointer to a mobility model will be subsequently used as the (replacement) source
-     * mobility model for the rest of DoCalcRxPower() processing.
-     *
-     * @param prologueFunction Function that receives two mobility models and compute a third, based
-     * on the wrapped position of the second model in respect to the first
+     * @brief Clear cached O2I Building Penetration loss.
+     *        Triggers a recomputation of losses.
+     *        Used for testing.
      */
-    static void InstallDoCalcRxPowerPrologueFunction(
-        std::function<Ptr<MobilityModel>(Ptr<const MobilityModel>, Ptr<const MobilityModel>)>
-            prologueFunction)
-    {
-        m_doCalcRxPowerPrologueFunction = prologueFunction;
-    }
+    void ClearO2iLossCacheMap();
 
   private:
     /**
@@ -108,8 +95,6 @@ class ThreeGppPropagationLossModel : public PropagationLossModel
     double DoCalcRxPower(double txPowerDbm,
                          Ptr<MobilityModel> a,
                          Ptr<MobilityModel> b) const override;
-
-    int64_t DoAssignStreams(int64_t stream) override;
 
     /**
      * @brief Computes the pathloss between a and b
@@ -158,6 +143,22 @@ class ThreeGppPropagationLossModel : public PropagationLossModel
      *        independent realization and stores it in the map, otherwise it calculates
      *        a new value as defined in 3GPP TR 38.901 7.4.3.1.
      *
+     *
+     * @param a tx mobility model (used for the key calculation)
+     * @param b rx mobility model (used for the key calculation)
+     * @param cond the LOS/NLOS channel condition
+     * @return o2iLoss
+     */
+    double GetO2iSub6GhzPenetrationLoss(Ptr<MobilityModel> a,
+                                        Ptr<MobilityModel> b,
+                                        ChannelCondition::LosConditionValue cond) const;
+
+    /**
+     * @brief Retrieves the o2i building penetration loss value by looking at m_o2iLossMap.
+     *        If not found or if the channel condition changed it generates a new
+     *        independent realization and stores it in the map, otherwise it calculates
+     *        a new value as defined in 3GPP TR 38.901 7.4.3.1.
+     *
      *        Note that all child classes should implement this function to support
      *        low losses calculation. As such, this function should be purely virtual.
      *
@@ -188,6 +189,20 @@ class ThreeGppPropagationLossModel : public PropagationLossModel
                                              Ptr<MobilityModel> b,
                                              ChannelCondition::LosConditionValue cond) const;
 
+    /**
+     * @brief Computes the o2i vehicular penetration loss by looking at m_o2iVehicularUtLossMap.
+     *        The loss is composed by the sum of losses for each UT, if vehicles,
+     *        as implied by their speed (30-120 km/h).
+     *        The loss for each UT is defined in 3GPP TR 38.901 7.4.3.2.
+     *
+     * @param a tx mobility model (used for the key calculation)
+     * @param b rx mobility model (used for the key calculation)
+     * @param cond the O2I channel condition (O2I, O2O)
+     * @return vehicular o2iLoss
+     */
+    double GetO2iVehicularLoss(Ptr<MobilityModel> a,
+                               Ptr<MobilityModel> b,
+                               ChannelCondition::O2iConditionValue cond) const;
     /**
      * @brief Indicates the condition of the o2i building penetration loss
      *        (defined in 3GPP TR 38.901 7.4.3.1).
@@ -273,6 +288,18 @@ class ThreeGppPropagationLossModel : public PropagationLossModel
 
   protected:
     void DoDispose() override;
+    void NotifyConstructionCompleted() override;
+    /**
+     * @brief Returns a a single, link-specific, uniformly distributed variable
+     *        value depending on the specific 3GPP scenario (UMa, UMi-Street Canyon, RMa),
+     *        i.e., between 0 and 25 m for UMa and UMi-Street Canyon.
+     *        According to 3GPP TR 38.901 this 2D−in distance shall be UT-specifically
+     *        generated. 2D−in distance is used for the O2I penetration losses
+     *        calculation according to 3GPP TR 38.901 7.4.3.
+     *        See GetO2iLowPenetrationLoss/GetO2iHighPenetrationLoss functions.
+     * @return Returns 02i 2D distance (in meters) used to calculate low/high losses.
+     */
+    virtual double GetO2iDistance2dInSub6Ghz() const;
 
     /**
      * @brief Computes the 2D distance between two 3D vectors
@@ -285,8 +312,9 @@ class ThreeGppPropagationLossModel : public PropagationLossModel
     Ptr<ChannelConditionModel> m_channelConditionModel; //!< pointer to the channel condition model
     double m_frequency;                                 //!< operating frequency in Hz
     bool m_shadowingEnabled;                            //!< enable/disable shadowing
-    bool m_enforceRanges;                           //!< strictly enforce TR 38.901 parameter ranges
-    bool m_buildingPenLossesEnabled;                //!< enable/disable building penetration losses
+    bool m_enforceRanges;            //!< strictly enforce TR 38.901 parameter ranges
+    bool m_buildingPenLossesEnabled; //!< enable/disable building penetration losses
+    double m_meanVehicleO2iLoss; //!< normal cars (9dB), cars with metal coated glass panels (20dB)
     Ptr<NormalRandomVariable> m_normRandomVariable; //!< normal random variable
 
     /** Define a struct for the m_shadowingMap entries */
@@ -310,6 +338,11 @@ class ThreeGppPropagationLossModel : public PropagationLossModel
     mutable std::unordered_map<uint32_t, O2iLossMapItem>
         m_o2iLossMap; //!< map to store the o2i Loss values
 
+    mutable std::unordered_map<uint32_t, double>
+        m_o2iVehicularUtLossMap; //!< vehicular O2I loss for each individual UT with speed x, such
+                                 //!< that 30 < x <= 120 km/h.
+                                 //!< UT is addressed by NodeId
+
     Ptr<UniformRandomVariable> m_randomO2iVar1; //!< a uniform random variable for the calculation
                                                 //!< of the indoor loss, see TR38.901 Table 7.4.3-2
     Ptr<UniformRandomVariable> m_randomO2iVar2; //!< a uniform random variable for the calculation
@@ -321,9 +354,10 @@ class ThreeGppPropagationLossModel : public PropagationLossModel
         m_normalO2iHighLossVar; //!< a normal random variable for the calculation of 02i high loss,
                                 //!< see TR38.901 Table 7.4.3-2
 
-    /// Optional prologue function that can be used to implement wraparound models
-    static std::function<Ptr<MobilityModel>(Ptr<const MobilityModel>, Ptr<const MobilityModel>)>
-        m_doCalcRxPowerPrologueFunction;
+    Ptr<NormalRandomVariable>
+        m_normalO2iVehicularLossVar; //!< a normal random variable for the calculation of
+                                     //!< penetration loss for vehicles see TR38.901 section 7.4.3.2
+    int64_t DoAssignStreams(int64_t stream) override;
 };
 
 /**
@@ -493,6 +527,18 @@ class ThreeGppUmaPropagationLossModel : public ThreeGppPropagationLossModel
     double GetO2iDistance2dIn() const override;
 
     /**
+     * @brief Returns a a single, link-specific, uniformly distributed variable
+     *        value depending on the specific 3GPP scenario (UMa, UMi-Street Canyon, RMa),
+     *        i.e., between 0 and 25 m for UMa and UMi-Street Canyon.
+     *        According to 3GPP TR 38.901 this 2D−in distance shall be UT-specifically
+     *        generated. 2D−in distance is used for the O2I penetration losses
+     *        calculation according to 3GPP TR 38.901 7.4.3.
+     *        See GetO2iLowPenetrationLoss/GetO2iHighPenetrationLoss functions.
+     * @return Returns 02i 2D distance (in meters) used to calculate low/high losses.
+     */
+    double GetO2iDistance2dInSub6Ghz() const override;
+
+    /**
      * @brief Computes the pathloss between a and b considering that the line of
      *        sight is obstructed.
      * @param a tx mobility model
@@ -586,6 +632,18 @@ class ThreeGppUmiStreetCanyonPropagationLossModel : public ThreeGppPropagationLo
      * @return Returns 02i 2D distance (in meters) used to calculate low/high losses.
      */
     double GetO2iDistance2dIn() const override;
+
+    /**
+     * @brief Returns a a single, link-specific, uniformly distributed variable
+     *        value depending on the specific 3GPP scenario (UMa, UMi-Street Canyon, RMa),
+     *        i.e., between 0 and 25 m for UMa and UMi-Street Canyon.
+     *        According to 3GPP TR 38.901 this 2D−in distance shall be UT-specifically
+     *        generated. 2D−in distance is used for the O2I penetration losses
+     *        calculation according to 3GPP TR 38.901 7.4.3.
+     *        See GetO2iLowPenetrationLoss/GetO2iHighPenetrationLoss functions.
+     * @return Returns 02i 2D distance (in meters) used to calculate low/high losses.
+     */
+    double GetO2iDistance2dInSub6Ghz() const override;
 
     /**
      * @brief Computes the pathloss between a and b considering that the line of

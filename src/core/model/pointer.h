@@ -125,6 +125,7 @@ class PointerChecker : public AttributeChecker
  * Create a PointerChecker for a type.
  * @tparam T \explicit The underlying type.
  * @returns The PointerChecker.
+ * @hidecaller
  */
 template <typename T>
 Ptr<AttributeChecker> MakePointerChecker();
@@ -227,7 +228,8 @@ PointerValue::Get() const
 }
 
 template <typename T>
-PointerValue::operator Ptr<T>() const
+PointerValue::
+operator Ptr<T>() const
 {
     return Get<T>();
 }
@@ -256,12 +258,14 @@ ATTRIBUTE_ACCESSOR_DEFINE(Pointer);
  * \fn ns3::Ptr<const ns3::AttributeAccessor> ns3::MakePointerAccessor (T1 a1)
  * @copydoc ns3::MakeAccessorHelper(T1)
  * @see AttributeAccessor
+ * @hidecaller
  */
 /**
  * @ingroup attribute_Pointer
  * \fn ns3::Ptr<const ns3::AttributeAccessor> ns3::MakePointerAccessor (T1 a1, T2 a2)
  * @copydoc ns3::MakeAccessorHelper(T1,T2)
  * @see AttributeAccessor
+ * @hidecaller
  */
 
 template <typename T>

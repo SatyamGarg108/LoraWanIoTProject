@@ -101,7 +101,7 @@ class WifiPhyThresholdsTest : public TestCase
 
     Ptr<SpectrumWifiPhy> m_phy;   ///< PHY object
     uint32_t m_rxSuccess;         ///< count number of successfully received packets
-    uint32_t m_rxFailure;         ///< count number of unsuccessfuly received packets
+    uint32_t m_rxFailure;         ///< count number of unsuccessfully received packets
     uint32_t m_rxDropped;         ///< count number of dropped packets
     uint32_t m_stateChanged;      ///< count number of PHY state change
     uint32_t m_rxStateCount;      ///< count number of PHY state change to RX state
@@ -129,7 +129,7 @@ Ptr<SpectrumSignalParameters>
 WifiPhyThresholdsTest::MakeWifiSignal(Watt_u txPower, const WifiPhyOperatingChannel& channel)
 {
     WifiTxVector txVector{OfdmPhy::GetOfdmRate6Mbps(),
-                          0,
+                          WIFI_MIN_TX_PWR_LEVEL,
                           WIFI_PREAMBLE_LONG,
                           NanoSeconds(800),
                           1,

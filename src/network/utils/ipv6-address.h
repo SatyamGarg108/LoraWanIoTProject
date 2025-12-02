@@ -14,6 +14,7 @@
 
 #include "ns3/address.h"
 #include "ns3/attribute-helper.h"
+#include "ns3/deprecated.h"
 
 #include <cstring>
 #include <ostream>
@@ -44,9 +45,25 @@ class Ipv6Address
 
     /**
      * @brief Constructs an Ipv6Address by parsing the input C-string.
-     * @param address the C-string containing the IPv6 address (e.g. 2001:660:4701::1).
+     * @param address the C-string containing the IPv6 address (e.g. 2001:db8:f00d:cafe::1).
      */
     Ipv6Address(const char* address);
+
+    /**
+     * @brief Checks if the string contains an Ipv6Address
+     *
+     * Input address is in format:
+     * \c 2001:db8:f00d:cafe::1
+     *
+     * Note: the function uses ``inet_pton`` internally.
+     *
+     * @see Address::CheckCompatible hich has a similar name but which
+     * instead checks the underlying type and length embedded in the Address.
+     *
+     * @param addressStr string containing the address as described above
+     * @return true if the string can be parsed as an IPv6 address
+     */
+    static bool CheckCompatible(const std::string& addressStr);
 
     /**
      * @brief Constructs an Ipv6Address by using the input 16 bytes.
@@ -74,7 +91,7 @@ class Ipv6Address
 
     /**
      * @brief Sets an Ipv6Address by parsing the input C-string.
-     * @param address the C-string containing the IPv6 address (e.g. 2001:660:4701::1).
+     * @param address the C-string containing the IPv6 address (e.g. 2001:db8:f00d:cafe::1).
      */
     void Set(const char* address);
 
@@ -342,6 +359,7 @@ class Ipv6Address
     /**
      * @return true if address is initialized (i.e., set to something), false otherwise
      */
+    NS_DEPRECATED_3_47("Use IsAny or std::optional")
     bool IsInitialized() const;
 
     /**
@@ -403,7 +421,6 @@ class Ipv6Address
      * @brief The address representation on 128 bits (16 bytes).
      */
     uint8_t m_address[16];
-    bool m_initialized; //!< IPv6 address has been explicitly initialized to a valid value.
 
     /**
      * @brief Equal to operator.
@@ -445,6 +462,8 @@ class Ipv6Prefix
   public:
     /**
      * @brief Default constructor.
+     *
+     * The default prefix is empty, corresponding to /0
      */
     Ipv6Prefix();
 
@@ -452,7 +471,7 @@ class Ipv6Prefix
      * @brief Constructs an Ipv6Prefix by using the input 16 bytes.
      *
      * The prefix length is calculated as the minimum prefix length, i.e.,
-     * 2001:db8:cafe:: will have a 47 bit prefix length.
+     * 2001:db8:cafe:: will have a 47 bit prefix length (0xE is 0b1110).
      *
      * @param prefix the 128-bit prefix
      */
@@ -507,10 +526,17 @@ class Ipv6Prefix
     ~Ipv6Prefix();
 
     /**
-     * @brief If the Address match the type.
-     * @param a a first address
-     * @param b a second address
-     * @return true if the type match, false otherwise
+     * @brief Check whether two addresses have the same bits in the prefix
+     * portion of their addresses.
+     *
+     * If the prefix length is 0, this method will return true regardless
+     * of the two address argument values.  If the prefix length is 128,
+     * this method will require that the two address arguments are the same.
+     *
+     * @param a first address to compare
+     * @param b second address to compare
+     * @return true if both addresses are equal in their masked bits,
+     * corresponding to the prefix length.
      */
     bool IsMatch(Ipv6Address a, Ipv6Address b) const;
 

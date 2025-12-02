@@ -10,7 +10,8 @@
 #define WIFI_UTILS_H
 
 #include "block-ack-type.h"
-#include "wifi-constants.h"
+#include "wifi-spectrum-value-helper.h"
+#include "wifi-standard-constants.h"
 #include "wifi-types.h"
 
 #include "ns3/fatal-error.h"
@@ -66,8 +67,14 @@ operator<<(std::ostream& os, const WifiDirection& direction)
     }
 }
 
+/// @brief IEEE 802.11-2020 9.2.4.5.2 TID subfield
+using tid_t = uint8_t;
+
+/// @brief IEEE 802.11be D7.0 Figure 9-207e—Link ID Info field format
+using linkId_t = uint8_t;
+
 /// @brief TID-indexed map of the link set to which the TID is mapped
-using WifiTidLinkMapping = std::map<uint8_t, std::set<uint8_t>>;
+using WifiTidLinkMapping = std::map<tid_t, std::set<linkId_t>>;
 
 /**
  * Convert from dBm to Watts.
@@ -274,6 +281,14 @@ bool IsGcr(Ptr<WifiMac> mac, const WifiMacHeader& hdr);
  * @return the MAC address of the individually addressed recipient to use
  */
 Mac48Address GetIndividuallyAddressedRecipient(Ptr<WifiMac> mac, const WifiMacHeader& hdr);
+
+/**
+ * Get the frequency range corresponding to the given PHY band.
+ *
+ * @param band the given PHY band
+ * @return the frequency range corresponding to the given PHY band
+ */
+FrequencyRange GetFrequencyRange(WifiPhyBand band);
 
 /// Link ID for single link operations (helps tracking places where correct link
 /// ID is to be used to support multi-link operations)

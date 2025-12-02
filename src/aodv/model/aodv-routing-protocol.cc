@@ -13,11 +13,6 @@
  * Authors: Elena Buchatskaia <borovkovaes@iitp.ru>
  *          Pavel Boyko <boyko@iitp.ru>
  */
-#define NS_LOG_APPEND_CONTEXT                                                                      \
-    if (m_ipv4)                                                                                    \
-    {                                                                                              \
-        std::clog << "[node " << m_ipv4->GetObject<Node>()->GetId() << "] ";                       \
-    }
 
 #include "aodv-routing-protocol.h"
 
@@ -37,6 +32,13 @@
 
 #include <algorithm>
 #include <limits>
+
+#undef NS_LOG_APPEND_CONTEXT
+#define NS_LOG_APPEND_CONTEXT                                                                      \
+    if (m_ipv4)                                                                                    \
+    {                                                                                              \
+        std::clog << "[node " << m_ipv4->GetObject<Node>()->GetId() << "] ";                       \
+    }
 
 namespace ns3
 {
@@ -1636,7 +1638,7 @@ RoutingProtocol::RecvReply(Ptr<Packet> p, Ipv4Address receiver, Ipv4Address send
     RrepHeader rrepHeader;
     p->RemoveHeader(rrepHeader);
     Ipv4Address dst = rrepHeader.GetDst();
-    NS_LOG_LOGIC("RREP destination " << dst << " RREP origin " << rrepHeader.GetOrigin());
+    NS_LOG_LOGIC("Route destination " << dst << " Route origin " << rrepHeader.GetOrigin());
 
     uint8_t hop = rrepHeader.GetHopCount() + 1;
     rrepHeader.SetHopCount(hop);

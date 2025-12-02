@@ -12,6 +12,84 @@ Note that users who upgrade the simulator across versions, or who work directly 
 
 This file is a best-effort approach to solving this issue; we will do our best but can guarantee that there will be things that fall through the cracks, unfortunately. If you, as a user, can suggest improvements to this file based on your experience, please contribute a patch or drop us a note on ns-developers mailing list.
 
+## Changes from ns-3.46.1 to ns-3-dev
+
+### New API
+
+* (applications) New trace sources `SourceApplication::ConnectionSucceeded` and `SourceApplication::ConnectionFailed` have been added to report connection success/failure events.
+
+### Changes to existing API
+
+* Address type 0 was previously used as a wildcard. Type 0 is now disallowd for any practical use. In order to create an Address from raw bytes, you must now set the Address type beforehand. An example is in ArpHeader::Deserialize.
+* (applications) The trace source `UdpServer::Rx` has a changed trace signature as a result of the
+  move of this trace to the `SinkApplication` class.  Client code using this trace can either update
+  to the new `Rx` trace signature or instead use the same trace sink function or method with the
+  the `SinkApplication::RxWithoutAddress` trace.
+* Initializing a Ipv[4,6]Address from a string using the constructor or the `Set` function will result in a crash if the string can not be parsed as an IPv4 or IPv6 address.
+* The `Ipv[4,6]Address::IsInitialized()` function has been deprecated and returns always `true`. The default value of Ipv4Address created with the constructor that takes no arguments is 0.0.0.0 (previously, it was 102.102.102.102), and an Ipv4Address instance can be checked against that unspecified address value (or use std::optional to denote an address that has not been set yet).
+* A new static function `Ipv[4,6]Address::CheckCompatible()` has been added to safely check if a string can be parsed as an IPv4 or IPv6 address.
+* (network): The address class comparison is now based on std::strong_ordering operator<=> comparison operator.
+* (network): An empty (uninitialized) Address is now printed as "00-00:00".
+* (internet): The function `Ipv4InterfaceAddress::SetBroadcast` has been removed from the codebase because the broadcast address must be built from the IP address and mask.
+
+### Changes to build system
+
+### Changed behavior
+
+* (wifi) `CcaEdThreshold` can be changed at run-time.
+
+## Changes from ns-3.46 to ns-3.46.1
+
+The ns-3.46.1 contains some small build system fixes discovered after the ns-3.46 release, and two
+new module documentation chapters (see [RELEASE_NOTES.md](RELEASE_NOTES.md)). There are no API
+changes, changes to how the build system works, or changed behavior of the models, compared with
+the ns-3.46 release.
+
+## Changes from ns-3.45 to ns-3.46
+
+### New API
+
+* (spectrum) Added the base `WraparoundModel`, which is retrieved from the associated objects of a spectrum channel, and then used to wraparound the transmitter mobility model during transmissions.
+* (spectrum) Added the `HexagonalWraparoundModel`, which implements the wraparound for a hexagonal cell deployment, typical of cellular networks.
+* (wifi) Added a `StaticWifiSetupHelper` to (optionally) setup Wi-Fi devices (associations, block ack agreements, EMLSR mode) at simulation start time, without actually exchanging management frames over the air.
+to DisableScanning` attribute to `StaWifiMac` to disable channel scanning; it can be useful to set this attribute to false when a static setup is performed.
+* (wifi) Added a new `EarlyTxopEndDetect` attribute to `EhtFrameExchangeManager` to control whether the Duration/ID value of the frame being transmitted or received by a device shall be used to early detect the end of an ongoing TXOP (held by another device).
+* (wifi) Added a new `DisableScanning` attribute to `StaWifiMac` to disable channel scanning; it can be useful to set this attribute to false when a static setup is performed.
+* (tcp) Added new attributes ``TcpSocketBase::UseAbe``, ``TcpCubic::BetaEcn``, ``TcpNewReno::BetaEcn``, ``TcpLinuxReno::BetaLoss``, ``TcpNewReno::BetaLoss``, ``TcpLinuxReno::BetaLoss`` and  to implement the Alternative Backoff with ECN (ABE) mechanism for NewReno and CUBIC. This mechanism is specified by RFC 8511.
+
+### Changes to existing API
+
+The wimax module was removed and moved to the ns-3 App Store.
+
+* (antenna) Reformatted documentation.
+* (documentation) Improve models documentation look and feel.
+* (internet) Added check for longest prefix match in GlobalRouting.
+* (lr-wpan) Debloat MAC PD-DATA.indication and reduce packet copies.
+* (zigbee) Added group table.
+* (zigbee) Added Groupcast (Multicast) support.
+* (zigbee) Added basic APS layer support.
+* (mobility) Mobility models now implement a Copy() function.
+* (propagation) MatrixPropagationLossModels are now associated per NodeId, and not per mobility model objects.
+* (propagation) Removed ThreeGppPropagationLossModel prologue function, added temporarily for ns-3.45 wraparound support.
+* (spectrum) MobilityModels associated to devices are not passed to receptor in SpectrumChannel. A virtual mobility model object, created from a copy and subject to wraparound is passed in its place.
+* (spectrum) SpectrumSignalParameters now includes an entry for the transmitter virtual mobility model.
+* (zigbee) Several callback type definitions were moved from global to class scope, for the ZigbeeAps and ZigbeeNwk classes.
+
+### Changes to build system
+
+* Raised minimum C++ version from C++20 to C++23.
+* Raised minimum CMake version from 3.13 to 3.20.
+* Raised minimum Clang version from 11 to 17.
+* Raised minimum GCC version from 10.1 to 11.0.
+* Added support for ClangCL compiler (part of MSVC tools).
+* Added ``GENERATE_EXPORT_HEADER`` flag to the CMake ``build_lib`` macro. It will generate a ``ns3/module-export.h`` header file, which defines a C++ macro``MODULE_EXPORT``. The macro must be used when declaring a class with static member variables, or a global variable exported by a library.
+
+### Changed behavior
+
+* (internet) ArpCache::Flush() and NdiscCache::Flush() no longer remove autogenerated entries.
+* (internet) The Ipv[4,6]RawSocket now reflects the Linux implementation, meaning that fragmented packets are reassembled (fragments are not anymore received by the socket), and packets that are simply forwarded are not received by the socket either (fixes #809).
+* (wifi) WiFi backoffs are now reset only if PHY went to sleep or off for more than a threshold, improving performance and compliance with standards.
+
 ## Changes from ns-3.44 to ns-3.45
 
 ### New API

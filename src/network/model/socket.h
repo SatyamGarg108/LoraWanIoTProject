@@ -142,6 +142,7 @@ class Socket : public Object
      *
      * @param node The node on which to create the socket
      * @param tid The TypeId of a SocketFactory class to use
+     * @hidecaller
      */
     static Ptr<Socket> CreateSocket(Ptr<Node> node, TypeId tid);
     /**
@@ -169,7 +170,7 @@ class Socket : public Object
      *        completed. The callback is passed  back a pointer to
      *        the same socket object.
      * @param connectionFailed this callback is invoked when the
-     *        connection request initiated by the user is unsuccessfuly
+     *        connection request initiated by the user is unsuccessfully
      *        completed. The callback is passed back a pointer to the
      *        same socket object.
      */

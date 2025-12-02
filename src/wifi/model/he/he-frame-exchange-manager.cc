@@ -644,8 +644,8 @@ HeFrameExchangeManager::SendPsduMap()
             ForwardPsduDown(triggerPsdu, acknowledgment->muBarTxVector);
 
             // Pass TRIGVECTOR to HE PHY (equivalent to PHY-TRIGGER.request primitive)
-            auto hePhy =
-                StaticCast<HePhy>(m_phy->GetPhyEntity(responseTxVector->GetModulationClass()));
+            auto hePhy = std::static_pointer_cast<HePhy>(
+                m_phy->GetPhyEntity(responseTxVector->GetModulationClass()));
             hePhy->SetTrigVector(m_trigVector, timeout);
 
             return;
@@ -892,7 +892,8 @@ HeFrameExchangeManager::SendPsduMap()
         timerType == WifiTxTimer::WAIT_QOS_NULL_AFTER_BSRP_TF)
     {
         // Pass TRIGVECTOR to HE PHY (equivalent to PHY-TRIGGER.request primitive)
-        auto hePhy = StaticCast<HePhy>(m_phy->GetPhyEntity(responseTxVector->GetModulationClass()));
+        auto hePhy = std::static_pointer_cast<HePhy>(
+            m_phy->GetPhyEntity(responseTxVector->GetModulationClass()));
         hePhy->SetTrigVector(m_trigVector, m_txTimer.GetDelayLeft());
     }
     else if (timerType == WifiTxTimer::NOT_RUNNING &&
@@ -929,7 +930,8 @@ HeFrameExchangeManager::ForwardPsduMapDown(WifiConstPsduMap psduMap, WifiTxVecto
 
     if (ns3::IsDlMu(txVector.GetPreambleType()))
     {
-        auto hePhy = StaticCast<HePhy>(m_phy->GetPhyEntity(txVector.GetModulationClass()));
+        auto hePhy =
+            std::static_pointer_cast<HePhy>(m_phy->GetPhyEntity(txVector.GetModulationClass()));
         auto sigBMode = hePhy->GetSigBMode(txVector);
         txVector.SetSigBMode(sigBMode);
     }
@@ -1510,11 +1512,11 @@ HeFrameExchangeManager::GetHeTbTxVector(CtrlTriggerHeader trigger, Mac48Address 
     NS_ASSERT_MSG(heConfiguration, "This STA has to be an HE station to send an HE TB PPDU");
     v.SetBssColor(heConfiguration->m_bssColor);
 
-    if (userInfoIt->IsUlTargetRssiMaxTxPower())
+    if (userInfoIt->IsUlTargetRxPowerMaxTxPower())
     {
         NS_LOG_LOGIC("AP requested using the max transmit power (" << m_phy->GetTxPowerEnd()
                                                                    << " dBm)");
-        v.SetTxPowerLevel(m_phy->GetNTxPower());
+        v.SetTxPowerLevel(m_phy->GetNTxPowerLevels());
         return v;
     }
 
@@ -1542,10 +1544,10 @@ HeFrameExchangeManager::GetHeTbTxVector(CtrlTriggerHeader trigger, Mac48Address 
         trigger.GetApTxPower() -
         static_cast<int8_t>(
             *optRssi); // cast RSSI to be on equal footing with AP Tx power information
-    auto reqTxPower = dBm_u{static_cast<double>(userInfoIt->GetUlTargetRssi() + pathLossDb)};
+    auto reqTxPower = dBm_u{static_cast<double>(userInfoIt->GetUlTargetRxPower() + pathLossDb)};
 
     // Convert the transmit power to a power level
-    uint8_t numPowerLevels = m_phy->GetNTxPower();
+    const auto numPowerLevels = m_phy->GetNTxPowerLevels();
     if (numPowerLevels > 1)
     {
         dBm_u step = (m_phy->GetTxPowerEnd() - m_phy->GetTxPowerStart()) / (numPowerLevels - 1);
@@ -1594,12 +1596,20 @@ HeFrameExchangeManager::SetTargetRssi(CtrlTriggerHeader& trigger) const
         auto itAidAddr = staList.find(userInfo.GetAid12());
         NS_ASSERT(itAidAddr != staList.end());
         auto optRssi = GetMostRecentRssi(itAidAddr->second);
+        if (!optRssi.has_value())
+        {
+            // This might happen after static setup where the AP has not received any
+            // frame from the client yet.
+            userInfo.SetUlTargetRxPowerMaxTxPower();
+            continue;
+        }
+
         NS_ASSERT(optRssi);
         auto rssi = static_cast<int8_t>(*optRssi);
         rssi = (rssi >= -20)
                    ? -20
                    : ((rssi <= -110) ? -110 : rssi); // cap so as to keep within [-110; -20] dBm
-        userInfo.SetUlTargetRssi(rssi);
+        userInfo.SetUlTargetRxPower(rssi);
     }
 }
 
@@ -1899,7 +1909,7 @@ HeFrameExchangeManager::SendQosNullFramesInTbPpdu(const CtrlTriggerHeader& trigg
     // TR3: Sequence numbers for transmitted QoS (+)Null frames may be set
     // to any value. (Table 10-3 of 802.11-2016)
     header.SetSequenceNumber(0);
-    // Set the EOSP bit so that NotifyTxToEdca will add the Queue Size
+    // Set the EOSP bit so that HtFEM::FinalizeMacHeader will add the Queue Size
     header.SetQosEosp();
 
     WifiTxParameters txParams;

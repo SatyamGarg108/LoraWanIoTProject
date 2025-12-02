@@ -15,14 +15,17 @@
 #include "ns3/config.h"
 #include "ns3/eht-configuration.h"
 #include "ns3/eht-ppdu.h"
+#include "ns3/frame-capture-model.h"
 #include "ns3/he-configuration.h"
 #include "ns3/ht-configuration.h"
+#include "ns3/interference-helper.h"
 #include "ns3/log.h"
 #include "ns3/mobility-model.h"
 #include "ns3/names.h"
 #include "ns3/net-device-queue-interface.h"
 #include "ns3/obss-pd-algorithm.h"
 #include "ns3/pointer.h"
+#include "ns3/preamble-detection-model.h"
 #include "ns3/qos-txop.h"
 #include "ns3/qos-utils.h"
 #include "ns3/radiotap-header.h"
@@ -30,6 +33,7 @@
 #include "ns3/vht-configuration.h"
 #include "ns3/wifi-mac-queue.h"
 #include "ns3/wifi-mac-trailer.h"
+#include "ns3/wifi-radio-energy-model.h"
 
 #include <bit>
 #include <memory>
@@ -275,14 +279,12 @@ WifiPhyHelper::PcapSniffTxEvent(const std::shared_ptr<PcapFilesInfo>& info,
     }
     case PcapHelper::DLT_IEEE802_11_RADIO: {
         Ptr<Packet> p = packet->Copy();
-        RadiotapHeader header;
-        GetRadiotapHeader(header,
-                          p,
-                          channelFreqMhz,
-                          info->device->GetPhy(phyId)->GetPrimary20Index(),
-                          txVector,
-                          aMpdu,
-                          staId);
+        const auto header = GetRadiotapHeader(p,
+                                              channelFreqMhz,
+                                              info->device->GetPhy(phyId)->GetPrimary20Index(),
+                                              txVector,
+                                              aMpdu,
+                                              staId);
         p->AddHeader(header);
         file->Write(Simulator::Now(), p);
         return;
@@ -318,15 +320,13 @@ WifiPhyHelper::PcapSniffRxEvent(const std::shared_ptr<PcapFilesInfo>& info,
     }
     case PcapHelper::DLT_IEEE802_11_RADIO: {
         Ptr<Packet> p = packet->Copy();
-        RadiotapHeader header;
-        GetRadiotapHeader(header,
-                          p,
-                          channelFreqMhz,
-                          info->device->GetPhy(phyId)->GetPrimary20Index(),
-                          txVector,
-                          aMpdu,
-                          staId,
-                          signalNoise);
+        const auto header = GetRadiotapHeader(p,
+                                              channelFreqMhz,
+                                              info->device->GetPhy(phyId)->GetPrimary20Index(),
+                                              txVector,
+                                              aMpdu,
+                                              staId,
+                                              signalNoise);
         p->AddHeader(header);
         file->Write(Simulator::Now(), p);
         return;
@@ -336,34 +336,29 @@ WifiPhyHelper::PcapSniffRxEvent(const std::shared_ptr<PcapFilesInfo>& info,
     }
 }
 
-void
-WifiPhyHelper::GetRadiotapHeader(RadiotapHeader& header,
-                                 Ptr<Packet> packet,
+RadiotapHeader
+WifiPhyHelper::GetRadiotapHeader(Ptr<Packet> packet,
                                  uint16_t channelFreqMhz,
                                  uint8_t p20Index,
                                  const WifiTxVector& txVector,
                                  MpduInfo aMpdu,
                                  uint16_t staId,
-                                 SignalNoiseDbm signalNoise)
+                                 std::optional<SignalNoiseDbm> signalNoise)
 {
-    header.SetAntennaSignalPower(signalNoise.signal);
-    header.SetAntennaNoisePower(signalNoise.noise);
-    GetRadiotapHeader(header, packet, channelFreqMhz, p20Index, txVector, aMpdu, staId);
-}
+    RadiotapHeader header;
 
-void
-WifiPhyHelper::GetRadiotapHeader(RadiotapHeader& header,
-                                 Ptr<Packet> packet,
-                                 uint16_t channelFreqMhz,
-                                 uint8_t p20Index,
-                                 const WifiTxVector& txVector,
-                                 MpduInfo aMpdu,
-                                 uint16_t staId)
-{
     const auto preamble = txVector.GetPreambleType();
     const auto modClass = txVector.GetModulationClass();
     const auto channelWidth = txVector.GetChannelWidth();
     const auto gi = txVector.GetGuardInterval();
+
+    header.SetWifiHeader(IsEht(preamble) ? 2 : 1);
+
+    if (signalNoise)
+    {
+        header.SetAntennaSignalPower(signalNoise->signal);
+        header.SetAntennaNoisePower(signalNoise->noise);
+    }
 
     header.SetTsft(Simulator::Now().GetMicroSeconds());
 
@@ -815,6 +810,8 @@ WifiPhyHelper::GetRadiotapHeader(RadiotapHeader& header,
         ehtFields.userInfo.push_back(userInfo);
         header.SetEhtFields(ehtFields);
     }
+
+    return header;
 }
 
 void
@@ -1301,6 +1298,7 @@ WifiHelper::EnableLogComponents(LogLevel logLevel)
     LogComponentEnable("WifiSpectrumPhyInterface", logLevel);
     LogComponentEnable("WifiSpectrumSignalParameters", logLevel);
     LogComponentEnable("WifiSpectrumValueHelper", logLevel);
+    LogComponentEnable("WifiStaticSetupHelper", logLevel);
     LogComponentEnable("WifiTxCurrentModel", logLevel);
     LogComponentEnable("WifiTxParameters", logLevel);
     LogComponentEnable("WifiTxTimer", logLevel);

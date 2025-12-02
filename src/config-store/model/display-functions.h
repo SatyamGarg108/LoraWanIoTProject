@@ -7,9 +7,6 @@
 #ifndef DISPLAY_FUNCTIONS_H
 #define DISPLAY_FUNCTIONS_H
 
-#include "model-node-creator.h"
-#include "model-typeid-creator.h"
-
 #include <gtk/gtk.h>
 
 namespace ns3
@@ -228,6 +225,6 @@ gboolean clean_model_callback_config_default(GtkTreeModel* model,
                                              GtkTreePath* path,
                                              GtkTreeIter* iter,
                                              gpointer data);
-} // end namespace ns3
+} // namespace ns3
 
 #endif

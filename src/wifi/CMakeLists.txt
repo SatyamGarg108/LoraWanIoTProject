@@ -14,6 +14,7 @@ set(source_files
     helper/wifi-radio-energy-model-helper.cc
     helper/yans-wifi-helper.cc
     helper/wifi-phy-rx-trace-helper.cc
+    helper/wifi-static-setup-helper.cc
     helper/wifi-tx-stats-helper.cc
     model/addba-extension.cc
     model/adhoc-wifi-mac.cc
@@ -137,7 +138,6 @@ set(source_files
     model/wifi-acknowledgment.cc
     model/wifi-assoc-manager.cc
     model/wifi-bandwidth-filter.cc
-    model/wifi-constants.cc
     model/wifi-default-ack-manager.cc
     model/wifi-default-assoc-manager.cc
     model/wifi-default-gcr-manager.cc
@@ -167,11 +167,13 @@ set(source_files
     model/wifi-ru.cc
     model/wifi-spectrum-phy-interface.cc
     model/wifi-spectrum-signal-parameters.cc
+    model/wifi-standard-constants.cc
     model/wifi-standards.cc
     model/wifi-tx-current-model.cc
     model/wifi-tx-parameters.cc
     model/wifi-tx-timer.cc
     model/wifi-tx-vector.cc
+    model/wifi-types.cc
     model/wifi-utils.cc
     model/yans-error-rate-model.cc
     model/yans-wifi-channel.cc
@@ -188,6 +190,7 @@ set(header_files
     helper/wifi-radio-energy-model-helper.h
     helper/yans-wifi-helper.h
     helper/wifi-phy-rx-trace-helper.h
+    helper/wifi-static-setup-helper.h
     helper/wifi-tx-stats-helper.h
     model/addba-extension.h
     model/adhoc-wifi-mac.h
@@ -310,7 +313,6 @@ set(header_files
     model/wifi-acknowledgment.h
     model/wifi-assoc-manager.h
     model/wifi-bandwidth-filter.h
-    model/wifi-constants.h
     model/wifi-default-ack-manager.h
     model/wifi-default-assoc-manager.h
     model/wifi-default-gcr-manager.h
@@ -328,6 +330,7 @@ set(header_files
     model/wifi-mode.h
     model/wifi-mpdu.h
     model/wifi-net-device.h
+    model/wifi-ns3-constants.h
     model/wifi-opt-field.h
     model/wifi-phy-band.h
     model/wifi-phy-common.h
@@ -346,6 +349,7 @@ set(header_files
     model/wifi-ru.h
     model/wifi-spectrum-phy-interface.h
     model/wifi-spectrum-signal-parameters.h
+    model/wifi-standard-constants.h
     model/wifi-standards.h
     model/wifi-tx-current-model.h
     model/wifi-tx-parameters.h
@@ -403,6 +407,8 @@ build_lib(
     test/wifi-retransmit-test.cc
     test/wifi-ru-allocation-test.cc
     test/wifi-channel-switching-test.cc
+    test/wifi-static-emlsr-test.cc
+    test/wifi-static-infra-bss-test.cc
     test/wifi-test.cc
     test/wifi-transmit-mask-test.cc
     test/wifi-txop-test.cc
@@ -411,4 +417,5 @@ build_lib(
     test/wifi-phy-mu-mimo-test.cc
     test/wifi-operating-channel-test.cc
     test/wifi-tx-stats-helper-test.cc
+  GENERATE_EXPORT_HEADER
 )

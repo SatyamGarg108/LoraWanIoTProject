@@ -23,7 +23,7 @@
       libboost-all-dev
       libgtk-3-dev
       libfl-dev
-      libxml2 libxml2-dev
+      $LIBXML2 libxml2-dev
       libopenmpi-dev openmpi-bin openmpi-common openmpi-doc
       libsqlite3-dev sqlite3
       libeigen3-dev
@@ -40,62 +40,7 @@ weekly-ubuntu:
   script:
     - echo "Starting Ubuntu jobs"
 
-# Ubuntu 20.04 (Until April 2025)
-weekly-build-ubuntu-20.04-debug:
-  extends: .weekly-base-ubuntu
-  needs: ["weekly-ubuntu"]
-  image: ubuntu:20.04
-  stage: build
-  variables:
-    MODE: debug
-    LIBGSL: libgsl23
-    COMPILER: g++-10
-
-weekly-build-ubuntu-20.04-default:
-  extends: .weekly-base-ubuntu
-  needs: ["weekly-ubuntu"]
-  image: ubuntu:20.04
-  stage: build
-  variables:
-    MODE: default
-    LIBGSL: libgsl23
-    COMPILER: g++-10
-
-weekly-build-ubuntu-20.04-optimized:
-  extends: .weekly-base-ubuntu
-  needs: ["weekly-ubuntu"]
-  image: ubuntu:20.04
-  stage: build
-  variables:
-    MODE: optimized
-    LIBGSL: libgsl23
-    COMPILER: g++-10
-
-weekly-test-ubuntu-20.04-default:
-  extends: .weekly-base-ubuntu
-  image: ubuntu:20.04
-  stage: test
-  needs: ["weekly-build-ubuntu-20.04-default"]
-  dependencies:
-    - weekly-build-ubuntu-20.04-default
-  variables:
-    MODE: default
-    LIBGSL: libgsl23
-    COMPILER: g++-10
-
-weekly-test-ubuntu-20.04-optimized:
-  extends: .weekly-base-ubuntu
-  image: ubuntu:20.04
-  stage: test
-  needs: ["weekly-build-ubuntu-20.04-optimized"]
-  dependencies:
-    - weekly-build-ubuntu-20.04-optimized
-  variables:
-    MODE: optimized
-    LIBGSL: libgsl23
-    COMPILER: g++-10
-
-# Ubuntu 22.04 (Until January 2032)
+# Ubuntu 22.04 (Until April 2027)
 weekly-build-ubuntu-22.04-debug:
   extends: .weekly-base-ubuntu
   needs: ["weekly-ubuntu"]
@@ -104,6 +49,7 @@ weekly-build-ubuntu-22.04-debug:
   variables:
     MODE: debug
     LIBGSL: libgsl27
+    LIBXML2: libxml2
     COMPILER: g++
 
 weekly-build-ubuntu-22.04-default:
@@ -114,6 +60,7 @@ weekly-build-ubuntu-22.04-default:
   variables:
     MODE: default
     LIBGSL: libgsl27
+    LIBXML2: libxml2
     COMPILER: g++
 
 weekly-build-ubuntu-22.04-optimized:
@@ -124,6 +71,7 @@ weekly-build-ubuntu-22.04-optimized:
   variables:
     MODE: optimized
     LIBGSL: libgsl27
+    LIBXML2: libxml2
     COMPILER: g++
 
 weekly-test-ubuntu-22.04-default:
@@ -136,6 +84,7 @@ weekly-test-ubuntu-22.04-default:
   variables:
     MODE: default
     LIBGSL: libgsl27
+    LIBXML2: libxml2
     COMPILER: g++
 
 weekly-test-ubuntu-22.04-optimized:
@@ -148,6 +97,67 @@ weekly-test-ubuntu-22.04-optimized:
   variables:
     MODE: optimized
     LIBGSL: libgsl27
+    LIBXML2: libxml2
+    COMPILER: g++
+
+# Ubuntu 24.04 (Until April 2029)
+weekly-build-ubuntu-24.04-debug:
+  extends: .weekly-base-ubuntu
+  needs: ["weekly-ubuntu"]
+  image: ubuntu:24.04
+  stage: build
+  variables:
+    MODE: debug
+    LIBGSL: libgsl27
+    LIBXML2: libxml2
+    COMPILER: g++
+
+weekly-build-ubuntu-24.04-default:
+  extends: .weekly-base-ubuntu
+  needs: ["weekly-ubuntu"]
+  image: ubuntu:24.04
+  stage: build
+  variables:
+    MODE: default
+    LIBGSL: libgsl27
+    LIBXML2: libxml2
+    COMPILER: g++
+
+weekly-build-ubuntu-24.04-optimized:
+  extends: .weekly-base-ubuntu
+  needs: ["weekly-ubuntu"]
+  image: ubuntu:24.04
+  stage: build
+  variables:
+    MODE: optimized
+    LIBGSL: libgsl27
+    LIBXML2: libxml2
+    COMPILER: g++
+
+weekly-test-ubuntu-24.04-default:
+  extends: .weekly-base-ubuntu
+  image: ubuntu:24.04
+  stage: test
+  needs: ["weekly-build-ubuntu-24.04-default"]
+  dependencies:
+    - weekly-build-ubuntu-24.04-default
+  variables:
+    MODE: default
+    LIBGSL: libgsl27
+    LIBXML2: libxml2
+    COMPILER: g++
+
+weekly-test-ubuntu-24.04-optimized:
+  extends: .weekly-base-ubuntu
+  image: ubuntu:24.04
+  stage: test
+  needs: ["weekly-build-ubuntu-24.04-optimized"]
+  dependencies:
+    - weekly-build-ubuntu-24.04-optimized
+  variables:
+    MODE: optimized
+    LIBGSL: libgsl27
+    LIBXML2: libxml2
     COMPILER: g++
 
 # Ubuntu Rolling (latest released, might be non-LTS)
@@ -159,6 +169,7 @@ weekly-build-ubuntu-rolling-debug:
   variables:
     MODE: debug
     LIBGSL: libgsl28
+    LIBXML2: libxml2-16
     COMPILER: g++
 
 weekly-build-ubuntu-rolling-default:
@@ -169,9 +180,9 @@ weekly-build-ubuntu-rolling-default:
   variables:
     MODE: default
     LIBGSL: libgsl28
+    LIBXML2: libxml2-16
     COMPILER: g++
 
-# Aug. 26, 2023: --disable-eigen is needed to prevent a -Werror=unused-variable
 weekly-build-ubuntu-rolling-optimized:
   extends: .weekly-base-ubuntu
   needs: ["weekly-ubuntu"]
@@ -180,8 +191,8 @@ weekly-build-ubuntu-rolling-optimized:
   variables:
     MODE: optimized
     LIBGSL: libgsl28
+    LIBXML2: libxml2-16
     COMPILER: g++
-    EXTRA_OPTIONS: --disable-eigen
 
 weekly-test-ubuntu-rolling-default:
   extends: .weekly-base-ubuntu
@@ -193,9 +204,9 @@ weekly-test-ubuntu-rolling-default:
   variables:
     MODE: default
     LIBGSL: libgsl28
+    LIBXML2: libxml2-16
     COMPILER: g++
 
-# Aug. 26, 2023: --disable-eigen is needed to prevent a -Werror=unused-variable
 weekly-test-ubuntu-rolling-optimized:
   extends: .weekly-base-ubuntu
   image: ubuntu:rolling
@@ -206,5 +217,5 @@ weekly-test-ubuntu-rolling-optimized:
   variables:
     MODE: optimized
     LIBGSL: libgsl28
+    LIBXML2: libxml2-16
     COMPILER: g++
-    EXTRA_OPTIONS: --disable-eigen

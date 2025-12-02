@@ -53,10 +53,17 @@ NS_OBJECT_ENSURE_REGISTERED(EhtFrameExchangeManager);
 TypeId
 EhtFrameExchangeManager::GetTypeId()
 {
-    static TypeId tid = TypeId("ns3::EhtFrameExchangeManager")
-                            .SetParent<HeFrameExchangeManager>()
-                            .AddConstructor<EhtFrameExchangeManager>()
-                            .SetGroupName("Wifi");
+    static TypeId tid =
+        TypeId("ns3::EhtFrameExchangeManager")
+            .SetParent<HeFrameExchangeManager>()
+            .AddConstructor<EhtFrameExchangeManager>()
+            .SetGroupName("Wifi")
+            .AddAttribute("EarlyTxopEndDetect",
+                          "Whether the Duration/ID value of the frame being transmitted "
+                          "or received can be used to early detect an ongoing TXOP end.",
+                          BooleanValue(true),
+                          MakeBooleanAccessor(&EhtFrameExchangeManager::m_earlyTxopEndDetect),
+                          MakeBooleanChecker());
     return tid;
 }
 
@@ -213,7 +220,10 @@ EhtFrameExchangeManager::StartTransmission(Ptr<Txop> edca, MHz_u allowedWidth)
                 }
 
                 // check that this link is blocked as expected
-                WifiContainerQueueId queueId(WIFI_QOSDATA_QUEUE, WIFI_UNICAST, *mldAddress, 0);
+                WifiContainerQueueId queueId(WIFI_QOSDATA_QUEUE,
+                                             WifiRcvAddr::UNICAST,
+                                             *mldAddress,
+                                             0);
                 auto mask =
                     m_apMac->GetMacQueueScheduler()->GetQueueLinkMask(AC_BE, queueId, m_linkId);
                 NS_ASSERT_MSG(mask,
@@ -233,8 +243,6 @@ EhtFrameExchangeManager::StartTransmission(Ptr<Txop> edca, MHz_u allowedWidth)
             }
         }
     }
-
-    std::optional<Time> timeToCtsEnd;
 
     if (m_staMac && m_staMac->IsEmlsrLink(m_linkId))
     {
@@ -335,7 +343,7 @@ EhtFrameExchangeManager::ForwardPsduDown(Ptr<const WifiPsdu> psdu, WifiTxVector&
     // EHT-SIG, the equivalent of HE-SIG-B, is present in EHT SU transmissions, too
     if (txVector.GetPreambleType() == WIFI_PREAMBLE_EHT_MU)
     {
-        auto phy = StaticCast<EhtPhy>(m_phy->GetPhyEntity(WIFI_MOD_CLASS_EHT));
+        auto phy = std::static_pointer_cast<EhtPhy>(m_phy->GetPhyEntity(WIFI_MOD_CLASS_EHT));
         auto sigBMode = phy->GetSigBMode(txVector);
         txVector.SetSigBMode(sigBMode);
     }
@@ -464,7 +472,7 @@ EhtFrameExchangeManager::ForwardPsduMapDown(WifiConstPsduMap psduMap, WifiTxVect
             const auto psduMapIt = psduMap.find(aid);
             const auto aidNotFoundAndNotTf = (psduMapIt == psduMap.cend()) && !IsTrigger(psduMap);
             // the PSDU to process: the one addressed to the given AID (if any) or the unique one
-            const auto psdu = (psduMapIt != psduMap.cend() ? psduMapIt : psduMap.cbegin())->second;
+            const auto psdu = (psduMapIt != psduMap.cend() ? psduMapIt : psduMap.begin())->second;
 
             if (GetWifiRemoteStationManager()->GetEmlsrEnabled(*clientIt) &&
                 (aidNotFoundAndNotTf || GetEmlsrSwitchToListening(psdu, aid, *clientIt)))
@@ -1111,7 +1119,10 @@ EhtFrameExchangeManager::SendCtsAfterRts(const WifiMacHeader& rtsHdr,
                 m_mac->GetWifiRemoteStationManager(linkId)->GetEmlsrEnabled(*mldAddress))
             {
                 // check that other links are blocked as expected
-                WifiContainerQueueId queueId(WIFI_QOSDATA_QUEUE, WIFI_UNICAST, *mldAddress, 0);
+                WifiContainerQueueId queueId(WIFI_QOSDATA_QUEUE,
+                                             WifiRcvAddr::UNICAST,
+                                             *mldAddress,
+                                             0);
                 auto mask =
                     m_apMac->GetMacQueueScheduler()->GetQueueLinkMask(AC_BE, queueId, linkId);
                 NS_ASSERT_MSG(mask, "No mask for client " << *mldAddress << " on link " << +linkId);
@@ -1505,7 +1516,7 @@ EhtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
             m_staMac->IsEmlsrLink(m_linkId))
         {
             // this is an initial Control frame
-            if (DropReceivedIcf())
+            if (DropReceivedIcf(mpdu))
             {
                 return;
             }
@@ -1515,10 +1526,29 @@ EhtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
     }
     else if (m_staMac && m_staMac->IsEmlsrLink(m_linkId) && !m_ongoingTxopEnd.IsPending() &&
              m_phy->GetPhyId() == m_staMac->GetEmlsrManager()->GetMainPhyId() &&
-             (hdr.IsRts() || hdr.IsBlockAckReq() || (hdr.IsData() && hdr.GetAddr1() == m_self)))
+             (hdr.IsRts() || hdr.IsBlockAckReq() || hdr.IsData()) && hdr.GetAddr1() == m_self)
     {
-        // a frame that is starting a DL TXOP has been received by the main PHY
+        // a frame that is starting a DL TXOP has been received by the main PHY, check if the frame
+        // shall be dropped
+        if (DropReceivedIcf(mpdu))
+        {
+            return;
+        }
+
         m_dlTxopStart = true;
+
+        if (inAmpdu)
+        {
+            // start blocking transmission on other links (which is normally done later on by
+            // PostProcessFrame()) to avoid starting an UL TXOP before end of A-MPDU
+            for (auto id : m_staMac->GetLinkIds())
+            {
+                if (id != m_linkId && m_staMac->IsEmlsrLink(id))
+                {
+                    m_staMac->BlockTxOnLink(id, WifiQueueBlockedReason::USING_OTHER_EMLSR_LINK);
+                }
+            }
+        }
     }
 
     if (!m_dlTxopStart && ShallDropReceivedMpdu(mpdu))
@@ -1542,33 +1572,6 @@ EhtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         // block transmissions to the EMLSR client on other links
         CheckEmlsrClientStartingTxop(hdr, txVector);
     }
-}
-
-void
-EhtFrameExchangeManager::EndReceiveAmpdu(Ptr<const WifiPsdu> psdu,
-                                         const RxSignalInfo& rxSignalInfo,
-                                         const WifiTxVector& txVector,
-                                         const std::vector<bool>& perMpduStatus)
-{
-    NS_LOG_FUNCTION(
-        this << *psdu << rxSignalInfo << txVector << perMpduStatus.size()
-             << std::all_of(perMpduStatus.begin(), perMpduStatus.end(), [](bool v) { return v; }));
-
-    const auto& hdr = psdu->GetHeader(0);
-    if (m_staMac && m_staMac->IsEmlsrLink(m_linkId) && !m_ongoingTxopEnd.IsPending() &&
-        m_phy->GetPhyId() == m_staMac->GetEmlsrManager()->GetMainPhyId() &&
-        (hdr.IsData() && hdr.GetAddr1() == m_self))
-    {
-        // a frame that is starting a DL TXOP has been received by the main PHY
-        m_dlTxopStart = true;
-    }
-
-    if (!m_dlTxopStart && ShallDropReceivedMpdu(*psdu->begin()))
-    {
-        return;
-    }
-
-    HeFrameExchangeManager::EndReceiveAmpdu(psdu, rxSignalInfo, txVector, perMpduStatus);
 }
 
 bool
@@ -1639,9 +1642,9 @@ EhtFrameExchangeManager::ShallDropReceivedMpdu(Ptr<const WifiMpdu> mpdu) const
 }
 
 bool
-EhtFrameExchangeManager::DropReceivedIcf()
+EhtFrameExchangeManager::DropReceivedIcf(Ptr<const WifiMpdu> icf)
 {
-    NS_LOG_FUNCTION(this);
+    NS_LOG_FUNCTION(this << *icf);
 
     auto emlsrManager = m_staMac->GetEmlsrManager();
     NS_ASSERT(emlsrManager);
@@ -1650,8 +1653,10 @@ EhtFrameExchangeManager::DropReceivedIcf()
     {
         // we received an ICF on a link that is blocked because another EMLSR link is
         // being used. Check if there is an ongoing DL TXOP on the other EMLSR link
-        auto apMldAddress = GetWifiRemoteStationManager()->GetMldAddress(m_bssid);
-        NS_ASSERT_MSG(apMldAddress, "MLD address not found for " << m_bssid);
+        auto addr2 = icf->GetHeader().GetAddr2();
+        const auto sender = GetWifiRemoteStationManager()->GetMldAddress(addr2).value_or(addr2);
+        NS_ASSERT_MSG(addr2 != m_bssid || sender != m_bssid,
+                      "If the ICF is not sent by an adhoc peer, it must be sent by an (AP) MLD");
 
         if (auto it = std::find_if(
                 m_staMac->GetLinkIds().cbegin(),
@@ -1662,27 +1667,29 @@ EhtFrameExchangeManager::DropReceivedIcf()
                         StaticCast<EhtFrameExchangeManager>(m_mac->GetFrameExchangeManager(linkId));
                     return linkId != m_linkId && m_staMac->IsEmlsrLink(linkId) &&
                            ehtFem->m_ongoingTxopEnd.IsPending() && ehtFem->m_txopHolder &&
-                           m_mac->GetWifiRemoteStationManager(linkId)->GetMldAddress(
-                               *ehtFem->m_txopHolder) == apMldAddress;
+                           m_mac->GetWifiRemoteStationManager(linkId)
+                                   ->GetMldAddress(*ehtFem->m_txopHolder)
+                                   .value_or(*ehtFem->m_txopHolder) == sender;
                 });
             it != m_staMac->GetLinkIds().cend())
         {
-            // AP is not expected to send ICFs on two links. If an ICF
-            // has been received on this link, it means that the DL TXOP
-            // on the other link terminated (e.g., the AP did not
-            // receive our response)
+            // A device is not expected to send ICFs on two links. If an ICF has been received on
+            // this link, it means that the DL TXOP on the other link terminated (e.g., the device
+            // did not receive our response)
             StaticCast<EhtFrameExchangeManager>(m_mac->GetFrameExchangeManager(*it))
                 ->m_ongoingTxopEnd.Cancel();
-            // we are going to start a TXOP on this link; unblock
-            // transmissions on this link, the other links will be
-            // blocked subsequently
+            // we are going to start a TXOP on this link; unblock transmissions on this link, the
+            // other links will be blocked subsequently
             m_staMac->UnblockTxOnLink({m_linkId}, WifiQueueBlockedReason::USING_OTHER_EMLSR_LINK);
         }
         else
         {
-            // We get here likely because transmission on the other EMLSR link
-            // started before the reception of the ICF ended. We drop this ICF and let the
-            // UL TXOP continue.
+            // We get here if either there is an ongoing DL TXOP on another EMLSR link but the
+            // TXOP holder is not the sender of the ICF (this may happen when the EMLSR client
+            // receives ICFs from the AP and a peer adhoc STA) or there is an ongoing UL TXOP on
+            // the other EMLSR link (which likely happens when a transmission on the other EMLSR
+            // link started before the reception of the ICF ended). In both cases, we drop this ICF
+            // and let the TXOP on the other EMLSR link continue.
             NS_LOG_DEBUG("Drop ICF because another EMLSR link is being used");
             m_icfDropCallback({WifiIcfDrop::USING_OTHER_LINK, m_linkId, m_bssid});
             return true;
@@ -1776,7 +1783,7 @@ EhtFrameExchangeManager::UpdateTxopEndOnTxStart(Time txDuration, Time durationId
         // the response)
         delay = m_txTimer.GetDelayLeft();
     }
-    else if (durationId <= m_phy->GetSifs())
+    else if (m_earlyTxopEndDetect && durationId <= m_phy->GetSifs())
     {
         // the TX timer is not running, hence no response is expected, and the Duration/ID value
         // is less than or equal to a SIFS; the TXOP will end after this transmission
@@ -1790,8 +1797,11 @@ EhtFrameExchangeManager::UpdateTxopEndOnTxStart(Time txDuration, Time durationId
         // after the end of this PPDU, hence we need to postpone the TXOP end in order to
         // get the PHY-RXSTART.indication
         delay = txDuration + m_phy->GetSifs() + m_phy->GetSlot() + EMLSR_RX_PHY_START_DELAY;
-        // TXOP end cannot be beyond the period protected via Duration/ID
-        delay = Min(delay, txDuration + durationId);
+        if (m_earlyTxopEndDetect)
+        {
+            // TXOP end cannot be beyond the period protected via Duration/ID
+            delay = Min(delay, txDuration + durationId);
+        }
     }
 
     NS_LOG_DEBUG("Expected TXOP end=" << (Simulator::Now() + delay).As(Time::S));
@@ -1835,7 +1845,7 @@ EhtFrameExchangeManager::UpdateTxopEndOnRxEnd(Time durationId)
 
     // if the Duration/ID of the received frame is less than a SIFS, the TXOP
     // is terminated
-    if (durationId <= m_phy->GetSifs())
+    if (m_earlyTxopEndDetect && durationId <= m_phy->GetSifs())
     {
         NS_LOG_DEBUG("Assume TXOP ended based on Duration/ID value");
         TxopEnd(m_txopHolder);
@@ -1845,8 +1855,11 @@ EhtFrameExchangeManager::UpdateTxopEndOnRxEnd(Time durationId)
     // we may send a response after a SIFS or we may receive another frame after a SIFS.
     // Postpone the TXOP end by considering the latter (which takes longer)
     auto delay = m_phy->GetSifs() + m_phy->GetSlot() + EMLSR_RX_PHY_START_DELAY;
-    // TXOP end cannot be beyond the period protected via Duration/ID
-    delay = Min(delay, durationId);
+    if (m_earlyTxopEndDetect)
+    {
+        // TXOP end cannot be beyond the period protected via Duration/ID
+        delay = Min(delay, durationId);
+    }
     NS_LOG_DEBUG("Expected TXOP end=" << (Simulator::Now() + delay).As(Time::S));
     m_ongoingTxopEnd =
         Simulator::Schedule(delay, &EhtFrameExchangeManager::TxopEnd, this, m_txopHolder);

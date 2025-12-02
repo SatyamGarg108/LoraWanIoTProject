@@ -108,7 +108,7 @@ void
 WifiPhyReceptionTest::SendPacket(dBm_u rxPower, uint32_t packetSize, uint8_t mcs)
 {
     WifiTxVector txVector = WifiTxVector(HePhy::GetHeMcs(mcs),
-                                         0,
+                                         WIFI_MIN_TX_PWR_LEVEL,
                                          WIFI_PREAMBLE_HE_SU,
                                          NanoSeconds(800),
                                          1,
@@ -849,7 +849,7 @@ class TestThresholdPreambleDetectionWithFrameCapture : public WifiPhyReceptionTe
     /**
      * Check the number of received packets
      * @param expectedSuccessCount the number of successfully received packets
-     * @param expectedFailureCount the number of unsuccessfuly received packets
+     * @param expectedFailureCount the number of unsuccessfully received packets
      */
     void CheckRxPacketCount(uint32_t expectedSuccessCount, uint32_t expectedFailureCount);
 };
@@ -2730,7 +2730,7 @@ void
 TestAmpduReception::SendAmpduWithThreeMpdus(dBm_u rxPower, uint32_t referencePacketSize)
 {
     WifiTxVector txVector = WifiTxVector(HePhy::GetHeMcs0(),
-                                         0,
+                                         WIFI_MIN_TX_PWR_LEVEL,
                                          WIFI_PREAMBLE_HE_SU,
                                          NanoSeconds(800),
                                          1,
@@ -4207,7 +4207,7 @@ class TestUnsupportedBandwidthReception : public TestCase
                    const std::vector<bool>& statusPerMpdu);
 
     /**
-     * Function called upon a PSDU received unsuccessfuly
+     * Function called upon a PSDU received unsuccessfully
      * @param psdu the PSDU
      */
     void RxFailure(Ptr<const WifiPsdu> psdu);
@@ -4265,7 +4265,7 @@ void
 TestUnsupportedBandwidthReception::SendPpdu(MHz_u centerFreq, MHz_u bandwidth)
 {
     auto txVector = WifiTxVector(HePhy::GetHeMcs0(),
-                                 0,
+                                 WIFI_MIN_TX_PWR_LEVEL,
                                  WIFI_PREAMBLE_HE_SU,
                                  NanoSeconds(800),
                                  1,
@@ -4526,7 +4526,7 @@ TestPrimary20CoveredByPpdu::CreatePpdu(MHz_u ppduCenterFreq)
     m_txPhy->SetOperatingChannel(
         WifiPhy::ChannelTuple{channelInfo.number, channelInfo.width, channelInfo.band, 0});
     auto txVector = WifiTxVector(HePhy::GetHeMcs7(),
-                                 0,
+                                 WIFI_MIN_TX_PWR_LEVEL,
                                  WIFI_PREAMBLE_HE_SU,
                                  NanoSeconds(800),
                                  1,
@@ -4736,7 +4736,7 @@ void
 TestSpectrumChannelWithBandwidthFilter::Send() const
 {
     WifiTxVector txVector = WifiTxVector(HePhy::GetHeMcs7(),
-                                         0,
+                                         WIFI_MIN_TX_PWR_LEVEL,
                                          WIFI_PREAMBLE_HE_SU,
                                          NanoSeconds(800),
                                          1,
@@ -4914,7 +4914,7 @@ void
 TestPhyDropDueToTx::Send(Ptr<WifiPhy> phy) const
 {
     const auto txVector = WifiTxVector(HePhy::GetHeMcs0(),
-                                       0,
+                                       WIFI_MIN_TX_PWR_LEVEL,
                                        WIFI_PREAMBLE_HE_SU,
                                        NanoSeconds(800),
                                        1,

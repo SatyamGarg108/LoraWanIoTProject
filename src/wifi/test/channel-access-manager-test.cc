@@ -76,10 +76,6 @@ class TxopTest : public TxopType
     void NotifyChannelAccessed(uint8_t linkId, Time txopDuration = Seconds(0)) override;
     /// @copydoc ns3::Txop::HasFramesToTransmit
     bool HasFramesToTransmit(uint8_t linkId) override;
-    /// @copydoc ns3::Txop::NotifySleep
-    void NotifySleep(uint8_t linkId) override;
-    /// @copydoc ns3::Txop::NotifyWakeUp
-    void NotifyWakeUp(uint8_t linkId) override;
     /// @copydoc ns3::Txop::GenerateBackoff
     void GenerateBackoff(uint8_t linkId) override;
 
@@ -117,8 +113,18 @@ class TxopTest : public TxopType
 class ChannelAccessManagerStub : public ChannelAccessManager
 {
   public:
-    ChannelAccessManagerStub()
+    /**
+     * @brief Get the type ID.
+     * @return the object TypeId
+     */
+    static TypeId GetTypeId()
     {
+        static TypeId tid = TypeId("ns3::ChannelAccessManagerStub")
+                                .SetParent<ns3::ChannelAccessManager>()
+                                .SetGroupName("Wifi")
+                                .AddConstructor<ChannelAccessManagerStub>()
+                                .HideFromDocumentation();
+        return tid;
     }
 
     /**
@@ -232,6 +238,17 @@ template <typename TxopType>
 class ChannelAccessManagerTest : public TestCase
 {
   public:
+    /// Input parameters for the StartTest function
+    struct Params
+    {
+        uint64_t slotTime{4};          ///< the slot time in microseconds
+        uint64_t sifs{6};              ///< the SIFS in microseconds
+        uint64_t eifsNoDifsNoSifs{10}; ///< the EIFS no DIFS no SIFS in microseconds
+        uint32_t ackTimeoutValue{20};  ///< the Ack timeout value in microseconds
+        MHz_u chWidth{20};             ///< the channel width
+        uint64_t resetBackoffThr{};    ///< reset backoff threshold
+    };
+
     ChannelAccessManagerTest();
     void DoRun() override;
 
@@ -258,17 +275,9 @@ class ChannelAccessManagerTest : public TestCase
   private:
     /**
      * Start test function
-     * @param slotTime the slot time
-     * @param sifs the SIFS
-     * @param eifsNoDifsNoSifs the EIFS no DIFS no SIFS
-     * @param ackTimeoutValue the Ack timeout value
-     * @param chWidth the channel width
+     * @param params the parameters for this function
      */
-    void StartTest(uint64_t slotTime,
-                   uint64_t sifs,
-                   uint64_t eifsNoDifsNoSifs,
-                   uint32_t ackTimeoutValue = 20,
-                   MHz_u chWidth = MHz_u{20});
+    void StartTest(const Params& params);
     /**
      * Add Txop function
      * @param aifsn the AIFSN
@@ -418,10 +427,9 @@ class ChannelAccessManagerTest : public TestCase
      *
      * @param at the event time
      * @param duration the duration of the interval during which no PHY is connected
-     * @param threshold the value for the ResetBackoffThreshold attribute
      * @param from the index of the Txop that has to request channel access when PHY is reconnected
      */
-    void AddPhyDisconnectEvt(uint64_t at, uint64_t duration, uint64_t threshold, uint32_t from);
+    void AddPhyDisconnectEvt(uint64_t at, uint64_t duration, uint32_t from);
 
     /**
      * Add a PHY reconnect event consisting in another PHY operating on the link for the given time.
@@ -430,6 +438,22 @@ class ChannelAccessManagerTest : public TestCase
      * @param duration the duration of the interval during which another PHY is connected
      */
     void AddPhyReconnectEvt(uint64_t at, uint64_t duration);
+
+    /**
+     * Add PHY sleep/resume events.
+     *
+     * @param at the event time
+     * @param duration the duration of the interval during which the PHY is in sleep state
+     */
+    void AddPhySleepEvt(uint64_t at, uint64_t duration);
+
+    /**
+     * Add PHY off/on events.
+     *
+     * @param at the event time
+     * @param duration the duration of the interval during which the PHY is in off state
+     */
+    void AddPhyOffEvt(uint64_t at, uint64_t duration);
 
     typedef std::vector<Ptr<TxopTest<TxopType>>> TxopTests; //!< the TXOP tests typedef
 
@@ -482,18 +506,6 @@ bool
 TxopTest<TxopType>::HasFramesToTransmit(uint8_t linkId)
 {
     return !m_expectedGrants.empty();
-}
-
-template <typename TxopType>
-void
-TxopTest<TxopType>::NotifySleep(uint8_t linkId)
-{
-}
-
-template <typename TxopType>
-void
-TxopTest<TxopType>::NotifyWakeUp(uint8_t linkId)
-{
 }
 
 template <typename TxopType>
@@ -628,19 +640,17 @@ ChannelAccessManagerTest<TxopType>::DoCheckBusy(bool busy)
 
 template <typename TxopType>
 void
-ChannelAccessManagerTest<TxopType>::StartTest(uint64_t slotTime,
-                                              uint64_t sifs,
-                                              uint64_t eifsNoDifsNoSifs,
-                                              uint32_t ackTimeoutValue,
-                                              MHz_u chWidth)
+ChannelAccessManagerTest<TxopType>::StartTest(const Params& params)
 {
-    m_ChannelAccessManager = CreateObject<ChannelAccessManagerStub>();
+    m_ChannelAccessManager = CreateObjectWithAttributes<ChannelAccessManagerStub>(
+        "ResetBackoffThreshold",
+        TimeValue(MicroSeconds(params.resetBackoffThr)));
     m_feManager = CreateObject<FrameExchangeManagerStub<TxopType>>(this);
     m_ChannelAccessManager->SetupFrameExchangeManager(m_feManager);
-    m_ChannelAccessManager->SetSlot(MicroSeconds(slotTime));
-    m_ChannelAccessManager->SetSifs(MicroSeconds(sifs));
-    m_ChannelAccessManager->SetEifsNoDifs(MicroSeconds(eifsNoDifsNoSifs + sifs));
-    m_ackTimeoutValue = ackTimeoutValue;
+    m_ChannelAccessManager->SetSlot(MicroSeconds(params.slotTime));
+    m_ChannelAccessManager->SetSifs(MicroSeconds(params.sifs));
+    m_ChannelAccessManager->SetEifsNoDifs(MicroSeconds(params.eifsNoDifsNoSifs + params.sifs));
+    m_ackTimeoutValue = params.ackTimeoutValue;
     // the purpose of the following operations is to initialize the last busy struct
     // of the ChannelAccessManager. Indeed, InitLastBusyStructs(), which is called by
     // SetupPhyListener(), requires an attached PHY to determine the channel types
@@ -648,7 +658,7 @@ ChannelAccessManagerTest<TxopType>::StartTest(uint64_t slotTime,
     m_phy = CreateObject<SpectrumWifiPhy>();
     m_phy->SetInterferenceHelper(CreateObject<InterferenceHelper>());
     m_phy->AddChannel(CreateObject<MultiModelSpectrumChannel>());
-    m_phy->SetOperatingChannel(WifiPhy::ChannelTuple{0, chWidth, WIFI_PHY_BAND_6GHZ, 0});
+    m_phy->SetOperatingChannel(WifiPhy::ChannelTuple{0, params.chWidth, WIFI_PHY_BAND_6GHZ, 0});
     m_phy->ConfigureStandard(WIFI_STANDARD_80211be); // required to use 320 MHz channels
     m_ChannelAccessManager->SetupPhyListener(m_phy);
 }
@@ -664,7 +674,8 @@ ChannelAccessManagerTest<TxopType>::AddTxop(uint32_t aifsn)
     auto mac = CreateObjectWithAttributes<AdhocWifiMac>(
         "Txop",
         PointerValue(CreateObjectWithAttributes<Txop>("AcIndex", StringValue("AC_BE_NQOS"))));
-    mac->SetWifiPhys({nullptr});
+    mac->SetWifiPhys({m_phy});
+    mac->SetChannelAccessManagers({m_ChannelAccessManager});
     txop->SetWifiMac(mac);
     txop->SetAifsn(aifsn);
 }
@@ -910,11 +921,10 @@ template <typename TxopType>
 void
 ChannelAccessManagerTest<TxopType>::AddPhyDisconnectEvt(uint64_t at,
                                                         uint64_t duration,
-                                                        uint64_t threshold,
                                                         uint32_t from)
 {
-    m_ChannelAccessManager->SetAttribute("ResetBackoffThreshold",
-                                         TimeValue(MicroSeconds(threshold)));
+    TimeValue threshold;
+    m_ChannelAccessManager->GetAttribute("ResetBackoffThreshold", threshold);
 
     Simulator::Schedule(MicroSeconds(at) - Now(),
                         &ChannelAccessManager::RemovePhyListener,
@@ -925,7 +935,7 @@ ChannelAccessManagerTest<TxopType>::AddPhyDisconnectEvt(uint64_t at,
         auto txop = m_txop[from];
         auto hadFramesToTransmit = txop->HasFramesToTransmit(SINGLE_LINK_OP_ID);
         m_ChannelAccessManager->SetupPhyListener(m_phy);
-        if (duration > threshold)
+        if (MicroSeconds(duration) > threshold.Get())
         {
             // request channel access again because all backoffs have been reset
             if (m_ChannelAccessManager->NeedBackoffUponAccess(txop, hadFramesToTransmit, true))
@@ -960,6 +970,22 @@ ChannelAccessManagerTest<TxopType>::AddPhyReconnectEvt(uint64_t at, uint64_t dur
     });
 }
 
+template <typename TxopType>
+void
+ChannelAccessManagerTest<TxopType>::AddPhySleepEvt(uint64_t at, uint64_t duration)
+{
+    Simulator::Schedule(MicroSeconds(at) - Now(), &WifiPhy::SetSleepMode, m_phy, false);
+    Simulator::Schedule(MicroSeconds(at + duration) - Now(), &WifiPhy::ResumeFromSleep, m_phy);
+}
+
+template <typename TxopType>
+void
+ChannelAccessManagerTest<TxopType>::AddPhyOffEvt(uint64_t at, uint64_t duration)
+{
+    Simulator::Schedule(MicroSeconds(at) - Now(), &WifiPhy::SetOffMode, m_phy);
+    Simulator::Schedule(MicroSeconds(at + duration) - Now(), &WifiPhy::ResumeFromOff, m_phy);
+}
+
 /*
  * Specialization of DoRun () method for DCF
  */
@@ -971,7 +997,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //  1      4       5    6      8     11      12
     //  | sifs | aifsn | tx | idle | sifs | aifsn | tx |
     //
-    StartTest(1, 3, 10);
+    StartTest({.slotTime = 1, .sifs = 3});
     AddTxop(1);
     AddAccessRequest(1, 1, 5, 0);
     AddAccessRequest(8, 2, 12, 0);
@@ -983,7 +1009,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //                        7 start rx
     //
 
-    StartTest(1, 3, 10);
+    StartTest({.slotTime = 1, .sifs = 3});
     AddTxop(1);
     AddAccessRequest(1, 1, 5, 0);
     AddRxInsideSifsEvt(7, 10);
@@ -1002,7 +1028,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //        |
     //       30 request access. backoff slots: 4
 
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1);
     AddRxOkEvt(20, 40);
     AddRxOkEvt(80, 20);
@@ -1016,7 +1042,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //        |
     //       30 request access. backoff slots: 0
 
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1);
     AddRxOkEvt(20, 40);
     AddAccessRequest(30, 2, 70, 0);
@@ -1029,7 +1055,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //        |
     //       30 request access. backoff slots: 0
 
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1);
     AddRxOkEvt(20, 40);
     AddRxOkEvt(60, 40);
@@ -1042,7 +1068,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //  20    60     62     68      72
     //   | rx  | idle | sifs | aifsn | tx |
     //
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1);
     AddRxOkEvt(20, 40);
     AddAccessRequest(62, 2, 72, 0);
@@ -1053,7 +1079,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //   20   60     70     76      80
     //   | rx  | idle | sifs | aifsn | tx |
     //
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1);
     AddRxOkEvt(20, 40);
     AddAccessRequest(70, 2, 80, 0);
@@ -1065,7 +1091,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //   |    rx     | sifs | acktxttime | sifs + aifsn | bslot0 | bslot1 | bslot2 | bslot3 | tx |
     //        |      | <------eifs------>|
     //       30 request access. backoff slots: 4
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6, .eifsNoDifsNoSifs = 10});
     AddTxop(1);
     AddRxErrorEvt(20, 40);
     AddAccessRequest(30, 2, 102, 0);
@@ -1079,7 +1105,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //   |    rx     | sifs | acktxttime | sifs + aifsn | tx |
     //                             | sifs + aifsn |
     //             request access 70             80
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6, .eifsNoDifsNoSifs = 10});
     AddTxop(1);
     AddRxErrorEvt(20, 40);
     AddAccessRequest(70, 2, 86, 0);
@@ -1091,7 +1117,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //   |    rx     |
     //        |
     //       40 force Rx error
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6, .eifsNoDifsNoSifs = 10});
     AddTxop(1);
     AddRxErrorEvt(20, 40, 20); // At time 20, start reception for 40, but force error 20 into frame
     ExpectBusy(41, true);      // channel should remain busy for remaining duration
@@ -1105,7 +1131,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //   |    rx     | sifs  |   |  rx  | sifs | aifsn | bslot0 | bslot1 | bslot2 | bslot3 | tx |
     //        |      | <--eifs-->|
     //       30 request access. backoff slots: 4
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6, .eifsNoDifsNoSifs = 10});
     AddTxop(1);
     AddRxErrorEvt(20, 40);
     AddAccessRequest(30, 2, 101, 0);
@@ -1122,7 +1148,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     // bslot |  tx  |
     //                                                                 94      98     102     106
     //                                                                 110    112
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1); // high priority DCF
     AddTxop(3); // low priority DCF
     AddRxOkEvt(20, 40);
@@ -1140,7 +1166,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     // DCF1 - low  | sifs | aifsn |   tx   | Ack timeout | sifs |       |
     // DCF0 - high |                              |      | sifs |  tx   |
     //                                            ^ request access
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(0); // high priority DCF
     AddTxop(2); // low priority DCF
     AddAccessRequestWithAckTimeout(20, 20, 34, 1);
@@ -1156,7 +1182,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     // DCF1 - low  | sifs | aifsn |     tx     | got Ack | sifs |       |
     // DCF0 - high |                                |    | sifs |  tx   |
     //                                              ^ request access
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(0); // high priority DCF
     AddTxop(2); // low priority DCF
     AddAccessRequestWithSuccessfulAck(20, 20, 34, 2, 1);
@@ -1167,7 +1193,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //       20     26      34         54     60    62     68      76       80
     //  DCF0  | sifs | aifsn |    tx    | sifs | Ack | sifs | aifsn | bslot0 | tx |
     //                                            ^ request access
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(2);
     AddAccessRequest(20, 20, 34, 0);
     AddRxOkEvt(60, 2); // Ack
@@ -1178,7 +1204,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     // test simple NAV count. This scenario models a simple Data+Ack handshake
     // where the data rate used for the Ack is higher than expected by the Data source
     // so, the data exchange completes before the end of NAV.
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1);
     AddRxOkEvt(20, 40);
     AddNavStart(60, 15);
@@ -1191,7 +1217,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     // test more complex NAV handling by a CF-poll. This scenario models a
     // simple Data+Ack handshake interrupted by a CF-poll which resets the
     // NAV counter.
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1);
     AddRxOkEvt(20, 40);
     AddNavStart(60, 15);
@@ -1204,13 +1230,13 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //  20         60         80     86      94
     //   |    rx    |   idle   | sifs | aifsn |    tx    |
     //                         ^ request access
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(2);
     AddRxOkEvt(20, 40);
     AddAccessRequest(80, 10, 94, 0);
     EndTest();
 
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(2);
     AddRxOkEvt(20, 40);
     AddRxOkEvt(78, 8);
@@ -1223,7 +1249,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //  0          20     21     24      25   26
     //  | switching | idle | sifs | aifsn | tx |
     //                     ^ access request.
-    StartTest(1, 3, 10);
+    StartTest({.slotTime = 1, .sifs = 3});
     AddTxop(1);
     AddSwitchingEvt(0, 20);
     AddAccessRequest(21, 1, 25, 0);
@@ -1234,7 +1260,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //         |          |
     //        30 busy.   45 access request.
     //
-    StartTest(1, 3, 10);
+    StartTest({.slotTime = 1, .sifs = 3});
     AddTxop(1);
     AddSwitchingEvt(20, 20);
     AddCcaBusyEvt(30, 20);
@@ -1246,7 +1272,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //   |  rx  | switching | idle | sifs | aifsn | tx |
     //                             ^ access request.
     //
-    StartTest(1, 3, 10);
+    StartTest({.slotTime = 1, .sifs = 3});
     AddTxop(1);
     AddRxStartEvt(20, 40);
     AddSwitchingEvt(30, 20);
@@ -1257,7 +1283,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //   | busy | switching | idle | sifs | aifsn | tx |
     //                             ^ access request.
     //
-    StartTest(1, 3, 10);
+    StartTest({.slotTime = 1, .sifs = 3});
     AddTxop(1);
     AddCcaBusyEvt(20, 40);
     AddSwitchingEvt(30, 20);
@@ -1268,7 +1294,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //   |  nav  | switching | idle | sifs | aifsn | tx |
     //                              ^ access request.
     //
-    StartTest(1, 3, 10);
+    StartTest({.slotTime = 1, .sifs = 3});
     AddTxop(1);
     AddNavStart(20, 40);
     AddSwitchingEvt(30, 20);
@@ -1280,7 +1306,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //                                 |                          |
     //                                49 access request.          ^ access request.
     //
-    StartTest(1, 3, 10);
+    StartTest({.slotTime = 1, .sifs = 3});
     AddTxop(1);
     AddAccessRequestWithAckTimeout(20, 20, 24, 0);
     AddAccessRequest(49, 1, 54, 0);
@@ -1293,7 +1319,7 @@ ChannelAccessManagerTest<Txop>::DoRun()
     //        |                                                             |
     //       30 access request.                                             ^ access request.
     //
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1);
     AddRxOkEvt(20, 40);
     AddAccessRequest(30, 2, 80, 0);
@@ -1317,7 +1343,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //     |  rx  | sifs | aifsn |  tx  |
     //                |
     //               52 request access
-    StartTest(4, 6, 10, 20, MHz_u{40});
+    StartTest({.slotTime = 4, .sifs = 6, .chWidth = MHz_u{40}});
     AddTxop(1);
     AddRxOkEvt(20, 30);
     AddCcaBusyEvt(50, 10, WIFI_CHANLIST_SECONDARY);
@@ -1331,7 +1357,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //     |  rx  | sifs | aifsn |  tx  |
     //                       |
     //                      58 request access
-    StartTest(4, 6, 10, 20, MHz_u{80});
+    StartTest({.slotTime = 4, .sifs = 6, .chWidth = MHz_u{80}});
     AddTxop(1);
     AddRxOkEvt(20, 30);
     AddCcaBusyEvt(50, 10, WIFI_CHANLIST_SECONDARY);
@@ -1345,7 +1371,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //     |  rx  | sifs | aifsn | idle |  tx  |
     //                               |
     //                              62 request access
-    StartTest(4, 6, 10, 20, MHz_u{80});
+    StartTest({.slotTime = 4, .sifs = 6, .chWidth = MHz_u{80}});
     AddTxop(1);
     AddRxOkEvt(20, 30);
     AddCcaBusyEvt(50, 14, WIFI_CHANLIST_SECONDARY40);
@@ -1360,7 +1386,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //   |    rx    | sifs | acktxttime | sifs + aifsn |  tx  |
     //                   |
     //                  55 request access
-    StartTest(4, 6, 10, 20, MHz_u{160});
+    StartTest({.slotTime = 4, .sifs = 6, .eifsNoDifsNoSifs = 10, .chWidth = MHz_u{160}});
     AddTxop(1);
     AddRxErrorEvt(20, 30);
     AddCcaBusyEvt(50, 26, WIFI_CHANLIST_SECONDARY);
@@ -1375,7 +1401,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //   |    rx    | sifs | acktxttime | sifs + aifsn |  tx  |
     //                                        |
     //                                       70 request access
-    StartTest(4, 6, 10, 20, MHz_u{160});
+    StartTest({.slotTime = 4, .sifs = 6, .eifsNoDifsNoSifs = 10, .chWidth = MHz_u{160}});
     AddTxop(1);
     AddRxErrorEvt(20, 30);
     AddCcaBusyEvt(50, 26, WIFI_CHANLIST_SECONDARY40);
@@ -1390,7 +1416,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //   |    rx    | sifs | acktxttime | sifs + aifsn | idle |  tx  |
     //                                                     |
     //                                                    82 request access
-    StartTest(4, 6, 10, 20, MHz_u{160});
+    StartTest({.slotTime = 4, .sifs = 6, .eifsNoDifsNoSifs = 10, .chWidth = MHz_u{160}});
     AddTxop(1);
     AddRxErrorEvt(20, 30);
     AddCcaBusyEvt(50, 34, WIFI_CHANLIST_SECONDARY80);
@@ -1405,7 +1431,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //   |    rx    | sifs | acktxttime | sifs + aifsn |  tx  |
     //                   |
     //                  55 request access
-    StartTest(4, 6, 10, 20, MHz_u{320});
+    StartTest({.slotTime = 4, .sifs = 6, .eifsNoDifsNoSifs = 10, .chWidth = MHz_u{320}});
     AddTxop(1);
     AddRxErrorEvt(20, 30);
     AddCcaBusyEvt(50, 26, WIFI_CHANLIST_SECONDARY);
@@ -1420,7 +1446,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //   |    rx    | sifs | acktxttime | sifs + aifsn |  tx  |
     //                                        |
     //                                       70 request access
-    StartTest(4, 6, 10, 20, MHz_u{320});
+    StartTest({.slotTime = 4, .sifs = 6, .eifsNoDifsNoSifs = 10, .chWidth = MHz_u{320}});
     AddTxop(1);
     AddRxErrorEvt(20, 30);
     AddCcaBusyEvt(50, 26, WIFI_CHANLIST_SECONDARY40);
@@ -1435,7 +1461,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //   |    rx    | sifs | acktxttime | sifs + aifsn | idle |  tx  |
     //                                                     |
     //                                                    82 request access
-    StartTest(4, 6, 10, 20, MHz_u{320});
+    StartTest({.slotTime = 4, .sifs = 6, .eifsNoDifsNoSifs = 10, .chWidth = MHz_u{320}});
     AddTxop(1);
     AddRxErrorEvt(20, 30);
     AddCcaBusyEvt(50, 34, WIFI_CHANLIST_SECONDARY80);
@@ -1450,7 +1476,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //   |    rx    | sifs | acktxttime | sifs + aifsn | idle |  tx  |
     //                                                     |
     //                                                    82 request access
-    StartTest(4, 6, 10, 20, MHz_u{320});
+    StartTest({.slotTime = 4, .sifs = 6, .eifsNoDifsNoSifs = 10, .chWidth = MHz_u{320}});
     AddTxop(1);
     AddRxErrorEvt(20, 30);
     AddCcaBusyEvt(50, 34, WIFI_CHANLIST_SECONDARY160);
@@ -1463,7 +1489,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //      |                        |          |          |          |
     //     30 request access.    decrement  decrement  decrement  decrement
     //        backoff slots: 4    slots: 3   slots: 2   slots: 1   slots: 0
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1);
     AddRxOkEvt(20, 30);
     AddAccessRequest(30, 20, 76, 0);
@@ -1476,7 +1502,7 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //      |                  |                          |      |
     //   30 request access.  decrement                decrement  decrement
     //    backoff slots: 3    slots: 2                 slots: 1   slots: 0
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1);
     AddRxOkEvt(20, 30);
     AddRxOkEvt(61, 10);
@@ -1491,12 +1517,12 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //      |                  |               |
     //   30 request access.  decrement       reset
     //    backoff slots: 3    slots: 2       backoff
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6, .resetBackoffThr = 5});
     AddTxop(1);
     AddRxOkEvt(20, 30);
     AddAccessRequest(30, 20, 81, 0);
     ExpectBackoff(30, 3, 0);
-    AddPhyDisconnectEvt(61, 10, 0, 0);
+    AddPhyDisconnectEvt(61, 10, 0);
     EndTest();
 
     // Check backoff freeze while no PHY operates on a link for less than the threshold.
@@ -1505,12 +1531,12 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //      |                  |               |              |      |
     //   30 request access.  decrement       resume      decrement  decrement
     //    backoff slots: 3    slots: 2       backoff      slots: 1   slots: 0
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6, .resetBackoffThr = 20});
     AddTxop(1);
     AddRxOkEvt(20, 30);
     AddAccessRequest(30, 20, 89, 0);
     ExpectBackoff(30, 3, 0);
-    AddPhyDisconnectEvt(61, 10, 20, 0);
+    AddPhyDisconnectEvt(61, 10, 0);
     EndTest();
 
     // Check backoff left unmodified when previous PHY is reconnected to the link
@@ -1520,12 +1546,72 @@ ChannelAccessManagerTest<QosTxop>::DoRun()
     //      |                      |        |        |        |
     //   30 request access. decrement  decrement  decrement  decrement
     //    backoff slots: 4   slots: 3   slots: 2   slots: 1   slots: 0
-    StartTest(4, 6, 10);
+    StartTest({.slotTime = 4, .sifs = 6});
     AddTxop(1);
     AddRxOkEvt(20, 30);
     AddAccessRequest(30, 20, 76, 0);
     ExpectBackoff(30, 4, 0);
     AddPhyReconnectEvt(61, 10);
+    EndTest();
+
+    // Check reset of backoff and generation of new backoff value after that PHY is put to sleep for
+    // more than the threshold.
+    //  20     50     56      60     63          73     79      83       87       91       95    115
+    //   |  rx  | sifs | aifsn | idle | phy sleep | sifs | aifsn |  idle  |  idle  |  idle  |  tx  |
+    //      |                  |                  |              |        |        |
+    //   30 request access.  decrement      reset backoff    decrement  decrement decrement
+    //    backoff slots: 3    slots: 2     backoff slots: 3  slots: 2   slots: 1  slots: 0
+    StartTest({.slotTime = 4, .sifs = 6, .resetBackoffThr = 5});
+    AddTxop(1);
+    AddRxOkEvt(20, 30);
+    AddAccessRequest(30, 20, 95, 0);
+    ExpectBackoff(30, 3, 0);
+    AddPhySleepEvt(63, 10);
+    ExpectBackoff(73, 3, 0);
+    EndTest();
+
+    // Check backoff freeze while PHY is put to sleep for less than the threshold.
+    //  20     50     56      60     61          71     77      81     85     89    109
+    //   |  rx  | sifs | aifsn | idle | phy sleep | sifs | aifsn | idle | idle |  tx  |
+    //      |                  |                  |              |      |
+    //   30 request access.  decrement          resume      decrement  decrement
+    //    backoff slots: 3    slots: 2          backoff      slots: 1   slots: 0
+    StartTest({.slotTime = 4, .sifs = 6, .resetBackoffThr = 20});
+    AddTxop(1);
+    AddRxOkEvt(20, 30);
+    AddAccessRequest(30, 20, 89, 0);
+    ExpectBackoff(30, 3, 0);
+    AddPhySleepEvt(61, 10);
+    EndTest();
+
+    // Check reset of backoff and generation of new backoff value after that PHY is put to off for
+    // more than the threshold.
+    //  20     50     56      60     61        71     77      81       85       89       93    113
+    //   |  rx  | sifs | aifsn | idle | phy off | sifs | aifsn |  idle  |  idle  |  idle  |  tx  |
+    //      |                  |                |              |        |        |
+    //   30 request access.  decrement    reset backoff    decrement  decrement decrement
+    //    backoff slots: 3    slots: 2   backoff slots: 3  slots: 2   slots: 1  slots: 0
+    StartTest({.slotTime = 4, .sifs = 6, .resetBackoffThr = 5});
+    AddTxop(1);
+    AddRxOkEvt(20, 30);
+    AddAccessRequest(30, 20, 93, 0);
+    ExpectBackoff(30, 3, 0);
+    AddPhyOffEvt(61, 10);
+    ExpectBackoff(71, 3, 0);
+    EndTest();
+
+    // Check backoff freeze while PHY is put to off for less than the threshold.
+    //  20     50     56      60     63        73     79      83     87     91    111
+    //   |  rx  | sifs | aifsn | idle | phy off | sifs | aifsn | idle | idle |  tx  |
+    //      |                  |                |              |      |
+    //   30 request access.  decrement        resume      decrement  decrement
+    //    backoff slots: 3    slots: 2        backoff      slots: 1   slots: 0
+    StartTest({.slotTime = 4, .sifs = 6, .resetBackoffThr = 20});
+    AddTxop(1);
+    AddRxOkEvt(20, 30);
+    AddAccessRequest(30, 20, 91, 0);
+    ExpectBackoff(30, 3, 0);
+    AddPhyOffEvt(63, 10);
     EndTest();
 }
 
@@ -1748,15 +1834,15 @@ LargestIdlePrimaryChannelTest::DoRun()
  * that the frame is not transmitted. A backoff value is kept being generated as long as the
  * frame is kept in the queue.
  *
- *                                                       Backoff                             Last
- * Backoff                 Backoff        Backoff        value #3,                          backoff
- * value #0                value #1       value #2       unblock queue                       value
- *  |              ┌─────┐    |              |              |              ┌─────┐   ┌────┐    |
- *  |       ┌───┐  │Assoc│    |    |Decrement|    |Decrement|    |Decrement│ADDBA│   │QoS │    |
- *  |       │ACK│  │Resp │    |AIFS| backoff |slot| backoff |slot| backoff │ Req │. .│data│    |
- * ──┬─────┬┴───┴──┴─────┴┬───┬────────────────────────────────────────────┴─────┴───┴────┴┬───┬──
- *   │Assoc│              │ACK│                                                            │ACK│
- *   │ Req │              └───┘                                                            └───┘
+ *                                                      Backoff                          Last
+ * Backoff                 Backoff          Backoff     value #3,                       backoff
+ * value #0                value #1         value #2    unblock queue                    value
+ *  |              ┌─────┐    |                |           |           ┌─────┐   ┌────┐    |
+ *  |       ┌───┐  │Assoc│    |    | Decrement | Decrement | Decrement │ADDBA│   │QoS │    |
+ *  |       │ACK│  │Resp │    |AIFS|  backoff  |  backoff  |  backoff  │ Req │. .│data│    |
+ * ──┬─────┬┴───┴──┴─────┴┬───┬────────────────────────────────────────┴─────┴───┴────┴┬───┬──
+ *   │Assoc│              │ACK│                                                        │ACK│
+ *   │ Req │              └───┘                                                        └───┘
  *   └─────┘
  *
  * The ProactiveBackoff test checks the generation of backoff values when the attribute is set
@@ -2166,10 +2252,6 @@ BackoffGenerationTest::BackoffGenerated(AcIndex ac, uint32_t backoff, uint8_t li
                                   offset,
                                   "Backoff value generated too early");
             m_nextBackoffGen.Cancel();
-
-            // we get here when the backoff expired but no transmission occurred, thus we have
-            // generated a new backoff value and we will start decrementing the counter in a slot
-            delay = m_apMac->GetWifiPhy(linkId)->GetSlot();
         }
 
         if (m_nGenBackoff < nValues)

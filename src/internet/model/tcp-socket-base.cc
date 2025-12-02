@@ -52,7 +52,7 @@
 #include "ns3/uinteger.h"
 
 #include <algorithm>
-#include <math.h>
+#include <cmath>
 
 namespace
 {
@@ -194,6 +194,11 @@ TcpSocketBase::GetTypeId()
                                           "On",
                                           TcpSocketState::AcceptOnly,
                                           "AcceptOnly"))
+            .AddAttribute("UseAbe",
+                          "Parameter to set ABE functionality",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&TcpSocketBase::m_useAbe),
+                          MakeBooleanChecker())
             .AddTraceSource("RTO",
                             "Retransmission timeout",
                             MakeTraceSourceAccessor(&TcpSocketBase::m_rto),
@@ -293,6 +298,7 @@ TcpSocketBase::TcpSocketBase()
     : TcpSocket()
 {
     NS_LOG_FUNCTION(this);
+
     m_txBuffer = CreateObject<TcpTxBuffer>();
     m_txBuffer->SetRWndCallback(MakeCallback(&TcpSocketBase::GetRWnd, this));
     m_tcb = CreateObject<TcpSocketState>();
@@ -351,6 +357,14 @@ TcpSocketBase::TcpSocketBase()
     ok = m_tcb->TraceConnectWithoutContext("LastRTT",
                                            MakeCallback(&TcpSocketBase::UpdateLastRtt, this));
     NS_ASSERT(ok == true);
+}
+
+void
+TcpSocketBase::NotifyConstructionCompleted()
+{
+    NS_LOG_FUNCTION(this);
+
+    SetUseAbe(m_useAbe);
 }
 
 TcpSocketBase::TcpSocketBase(const TcpSocketBase& sock)
@@ -4804,6 +4818,24 @@ TcpSocketBase::SetUseEcn(TcpSocketState::UseEcn_t useEcn)
 {
     NS_LOG_FUNCTION(this << useEcn);
     m_tcb->m_useEcn = useEcn;
+}
+
+void
+TcpSocketBase::SetUseAbe(bool useAbe)
+{
+    NS_LOG_FUNCTION(this << useAbe);
+    if (m_tcb->m_useEcn == TcpSocketState::Off && useAbe)
+    {
+        NS_LOG_INFO("Enabling ECN along with ABE");
+        m_tcb->m_useEcn = TcpSocketState::On;
+    }
+    m_tcb->m_abeEnabled = useAbe;
+}
+
+bool
+TcpSocketBase::GetUseAbe() const
+{
+    return m_tcb->m_abeEnabled;
 }
 
 uint32_t

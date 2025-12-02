@@ -9,7 +9,6 @@
 #include "command-line.h"
 
 #include "config.h"
-#include "des-metrics.h"
 #include "environment-variable.h"
 #include "global-value.h"
 #include "log.h"
@@ -21,11 +20,16 @@
 #include "version.h"
 #endif
 
+#ifdef ENABLE_DES_METRICS
+#include "des-metrics.h"
+#endif
+
 #include <algorithm> // transform
 #include <cctype>    // tolower
 #include <cstdlib>   // exit
 #include <cstring>   // strlen
-#include <iomanip>   // setw, boolalpha
+#include <fstream>
+#include <iomanip> // setw, boolalpha
 #include <set>
 #include <sstream>
 
@@ -473,7 +477,7 @@ CommandLine::PrintDoxygenUsage() const
 
     std::fstream os(outf, std::fstream::out);
 
-    os << "/**\n \\file " << m_shortName << ".cc\n"
+    os << "/**\n @file " << m_shortName << ".cc\n"
        << "<h3>Usage</h3>\n"
        << "<code>$ ./ns3 run \"" << m_shortName << (!m_options.empty() ? " [Program Options]" : "")
        << (!nonOptions.empty() ? " [Program Arguments]" : "") << "\"</code>\n";
@@ -501,12 +505,12 @@ CommandLine::PrintDoxygenUsage() const
 
     if (!m_options.empty())
     {
-        listOptions("Program Options", m_options, "\\c --");
+        listOptions("Program Options", m_options, "@c --");
     }
 
     if (!nonOptions.empty())
     {
-        listOptions("Program Arguments", nonOptions, "\\c ");
+        listOptions("Program Arguments", nonOptions, "@c ");
     }
 
     os << "*/" << std::endl;

@@ -387,7 +387,7 @@ DsssPhy::IsAllowed(const WifiTxVector& /*txVector*/)
 uint32_t
 DsssPhy::GetMaxPsduSize() const
 {
-    return 4095;
+    return WIFI_PSDU_MAX_LENGTH;
 }
 
 } // namespace ns3
@@ -404,7 +404,7 @@ class ConstructorDsss
     ConstructorDsss()
     {
         ns3::DsssPhy::InitializeModes();
-        ns3::Ptr<ns3::DsssPhy> phyEntity = ns3::Create<ns3::DsssPhy>();
+        auto phyEntity = std::make_shared<ns3::DsssPhy>();
         ns3::WifiPhy::AddStaticPhyEntity(ns3::WIFI_MOD_CLASS_HR_DSSS, phyEntity);
         ns3::WifiPhy::AddStaticPhyEntity(
             ns3::WIFI_MOD_CLASS_DSSS,

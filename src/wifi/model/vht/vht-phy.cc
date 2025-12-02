@@ -520,7 +520,7 @@ VhtPhy::IsCombinationAllowed(uint8_t mcsValue, MHz_u channelWidth, uint8_t nss)
 uint32_t
 VhtPhy::GetMaxPsduSize() const
 {
-    return 4692480;
+    return WIFI_PSDU_MAX_LENGTH_VHT;
 }
 
 dBm_u
@@ -583,7 +583,7 @@ class ConstructorVht
     ConstructorVht()
     {
         ns3::VhtPhy::InitializeModes();
-        ns3::WifiPhy::AddStaticPhyEntity(ns3::WIFI_MOD_CLASS_VHT, ns3::Create<ns3::VhtPhy>());
+        ns3::WifiPhy::AddStaticPhyEntity(ns3::WIFI_MOD_CLASS_VHT, std::make_shared<ns3::VhtPhy>());
     }
 } g_constructor_vht; ///< the constructor for VHT modes
 

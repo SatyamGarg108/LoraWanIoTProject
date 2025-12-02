@@ -47,12 +47,23 @@
 #include <iomanip>
 #include <vector>
 
+/**
+ * @file
+ * Example comparing ns-3 to the Bianchi model.
+ *
+ * See the Wi-Fi Module documentation in the Models chapter.
+ */
+
 /// Avoid std::numbers::pi because it's C++20
 #define PI 3.1415926535
 
 NS_LOG_COMPONENT_DEFINE("WifiBianchi");
 
 using namespace ns3;
+
+/** Unnamed namespace, to disambiguate class Experiment. */
+namespace
+{
 
 std::ofstream cwTraceFile;      ///< File that traces CW over time
 std::ofstream backoffTraceFile; ///< File that traces backoff over time
@@ -69,14 +80,14 @@ std::map<Mac48Address, uint64_t>
 std::map<Mac48Address, uint64_t>
     packetsTransmitted; ///< Map that stores the total packets transmitted per STA
 std::map<Mac48Address, uint64_t>
-    psduFailed; ///< Map that stores the total number of unsuccessfuly received PSDUS (for which
+    psduFailed; ///< Map that stores the total number of unsuccessfully received PSDUS (for which
                 ///< the PHY header was successfully received)  per STA (including PSDUs not
                 ///< addressed to that STA)
 std::map<Mac48Address, uint64_t>
     psduSucceeded; ///< Map that stores the total number of successfully received PSDUs per STA
                    ///< (including PSDUs not addressed to that STA)
 std::map<Mac48Address, uint64_t> phyHeaderFailed; ///< Map that stores the total number of
-                                                  ///< unsuccessfuly received PHY headers per STA
+                                                  ///< unsuccessfully received PHY headers per STA
 std::map<Mac48Address, uint64_t>
     rxEventWhileTxing; ///< Map that stores the number of reception events per STA that occurred
                        ///< while PHY was already transmitting a PPDU
@@ -2409,6 +2420,9 @@ class Experiment
      * @param staTxPower the STA transmit power
      * @param pktInterval the packet interval
      * @return 0 if all went well
+     *
+     * Call graph was not generated because of its size.
+     * @hidecallgraph
      */
     int Run(const WifiHelper& wifi,
             const YansWifiPhyHelper& wifiPhy,
@@ -2842,6 +2856,8 @@ GetCount(const std::map<Mac48Address, uint64_t>& counter, Mac48Address addr)
     }
     return count;
 }
+
+} // unnamed namespace
 
 int
 main(int argc, char* argv[])

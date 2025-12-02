@@ -88,12 +88,6 @@
 /// Maximum number of messages per packet.
 #define OLSR_MAX_MSGS 64
 
-/// Maximum number of hellos per message (4 possible link types * 3 possible nb types).
-#define OLSR_MAX_HELLOS 12
-
-/// Maximum number of addresses advertised on a message.
-#define OLSR_MAX_ADDRS 64
-
 namespace ns3
 {
 
@@ -252,7 +246,7 @@ RoutingProtocol::RoutingProtocol()
 {
     m_uniformRandomVariable = CreateObject<UniformRandomVariable>();
 
-    m_hnaRoutingTable = Create<Ipv4StaticRouting>();
+    m_hnaRoutingTable = CreateObject<Ipv4StaticRouting>();
 }
 
 RoutingProtocol::~RoutingProtocol()
@@ -3032,6 +3026,7 @@ RoutingProtocol::RouteInput(Ptr<const Packet> p,
         NS_LOG_LOGIC("No dynamic route, check network routes");
         if (m_hnaRoutingTable->RouteInput(p, header, idev, ucb, mcb, lcb, ecb))
         {
+            // NOLINTNEXTLINE(readability-simplify-boolean-expr)
             return true;
         }
         else

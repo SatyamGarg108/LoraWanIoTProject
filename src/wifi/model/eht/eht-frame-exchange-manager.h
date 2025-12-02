@@ -189,10 +189,6 @@ class EhtFrameExchangeManager : public HeFrameExchangeManager
                      RxSignalInfo rxSignalInfo,
                      const WifiTxVector& txVector,
                      bool inAmpdu) override;
-    void EndReceiveAmpdu(Ptr<const WifiPsdu> psdu,
-                         const RxSignalInfo& rxSignalInfo,
-                         const WifiTxVector& txVector,
-                         const std::vector<bool>& perMpduStatus) override;
     void NavResetTimeout() override;
     void IntraBssNavResetTimeout() override;
     void SendCtsAfterRts(const WifiMacHeader& rtsHdr,
@@ -247,12 +243,16 @@ class EhtFrameExchangeManager : public HeFrameExchangeManager
      */
     bool UnblockEmlsrLinksIfAllowed(Mac48Address address, bool checkThisLink);
 
+    bool m_earlyTxopEndDetect; ///< whether the Duration/ID value of the frame being transmitted
+                               ///< or received can be used to early detect an ongoing TXOP end
+
   private:
     /**
+     * @param icf the received ICF
      * @return whether the received ICF must be dropped because we are unable to process it
      *         (e.g., another EMLSR link is being used or there is no time for main PHY switch)
      */
-    bool DropReceivedIcf();
+    bool DropReceivedIcf(Ptr<const WifiMpdu> icf);
 
     /**
      * For each EMLSR client in the given set of clients that did not respond to a frame requesting

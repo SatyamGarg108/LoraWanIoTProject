@@ -66,14 +66,14 @@ void
 Mac64Address::CopyFrom(const uint8_t buffer[8])
 {
     NS_LOG_FUNCTION(this << &buffer);
-    std::memcpy(m_address, buffer, 8);
+    std::copy(buffer, buffer + 8, m_address.begin());
 }
 
 void
 Mac64Address::CopyTo(uint8_t buffer[8]) const
 {
     NS_LOG_FUNCTION(this << &buffer);
-    std::memcpy(buffer, m_address, 8);
+    std::copy(m_address.begin(), m_address.end(), buffer);
 }
 
 bool
@@ -83,7 +83,8 @@ Mac64Address::IsMatchingType(const Address& address)
     return address.CheckCompatible(GetType(), 8);
 }
 
-Mac64Address::operator Address() const
+Mac64Address::
+operator Address() const
 {
     return ConvertTo();
 }
@@ -94,7 +95,7 @@ Mac64Address::ConvertFrom(const Address& address)
     NS_LOG_FUNCTION(address);
     NS_ASSERT(address.CheckCompatible(GetType(), 8));
     Mac64Address retval;
-    address.CopyTo(retval.m_address);
+    address.CopyTo(retval.m_address.data());
     return retval;
 }
 
@@ -102,7 +103,7 @@ Address
 Mac64Address::ConvertTo() const
 {
     NS_LOG_FUNCTION(this);
-    return Address(GetType(), m_address, 8);
+    return Address(GetType(), m_address.data(), 8);
 }
 
 uint64_t
@@ -156,26 +157,29 @@ uint8_t
 Mac64Address::GetType()
 {
     NS_LOG_FUNCTION_NOARGS();
-    static uint8_t type = Address::Register();
+    static uint8_t type = Address::Register("MacAddress", 8);
     return type;
 }
 
 std::ostream&
 operator<<(std::ostream& os, const Mac64Address& address)
 {
-    uint8_t ad[8];
-    address.CopyTo(ad);
-
+    std::ios_base::fmtflags ff = os.flags();
     os.setf(std::ios::hex, std::ios::basefield);
-    os.fill('0');
-    for (uint8_t i = 0; i < 7; i++)
-    {
-        os << std::setw(2) << (uint32_t)ad[i] << ":";
-    }
-    // Final byte not suffixed by ":"
-    os << std::setw(2) << (uint32_t)ad[7];
-    os.setf(std::ios::dec, std::ios::basefield);
-    os.fill(' ');
+    auto fill = os.fill('0');
+
+    os << std::setw(2) << static_cast<uint32_t>(address.m_address[0]) << ":";
+    os << std::setw(2) << static_cast<uint32_t>(address.m_address[1]) << ":";
+    os << std::setw(2) << static_cast<uint32_t>(address.m_address[2]) << ":";
+    os << std::setw(2) << static_cast<uint32_t>(address.m_address[3]) << ":";
+    os << std::setw(2) << static_cast<uint32_t>(address.m_address[4]) << ":";
+    os << std::setw(2) << static_cast<uint32_t>(address.m_address[5]) << ":";
+    os << std::setw(2) << static_cast<uint32_t>(address.m_address[6]) << ":";
+    os << std::setw(2) << static_cast<uint32_t>(address.m_address[7]);
+
+    os.flags(ff); // Restore stream flags
+    os.fill(fill);
+
     return os;
 }
 

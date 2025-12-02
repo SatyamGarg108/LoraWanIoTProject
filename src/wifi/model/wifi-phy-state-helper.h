@@ -9,7 +9,6 @@
 #ifndef WIFI_PHY_STATE_HELPER_H
 #define WIFI_PHY_STATE_HELPER_H
 
-#include "phy-entity.h"
 #include "wifi-phy-common.h"
 #include "wifi-phy-state.h"
 #include "wifi-ppdu.h"
@@ -18,6 +17,7 @@
 #include "ns3/nstime.h"
 #include "ns3/object.h"
 #include "ns3/traced-callback.h"
+#include "ns3/wifi-export.h"
 
 #include <algorithm>
 #include <list>
@@ -51,9 +51,9 @@ typedef Callback<void,
                  const std::vector<bool>&>
     RxOkCallback;
 /**
- * Callback if PSDU unsuccessfuly received
+ * Callback if PSDU unsuccessfully received
  *
- * arg1: PSDU received unsuccessfuly
+ * arg1: PSDU received unsuccessfully
  */
 typedef Callback<void, Ptr<const WifiPsdu>> RxErrorCallback;
 
@@ -62,7 +62,7 @@ typedef Callback<void, Ptr<const WifiPsdu>> RxErrorCallback;
  *
  * This objects implements the PHY state machine of the Wifi device.
  */
-class WifiPhyStateHelper : public Object
+class WIFI_EXPORT WifiPhyStateHelper : public Object
 {
   public:
     /**
@@ -336,14 +336,14 @@ class WifiPhyStateHelper : public Object
      * TracedCallback signature for transmit event.
      *
      * @param [in] packet The received packet.
-     * @param [in] mode   The transmission mode of the packet.
+     * @param [in] mode The transmission mode of the packet.
      * @param [in] preamble The preamble of the packet.
-     * @param [in] power  The transmit power level.
+     * @param [in] powerLevel The transmit power level.
      */
     typedef void (*TxTracedCallback)(Ptr<const Packet> packet,
                                      WifiMode mode,
                                      WifiPreamble preamble,
-                                     uint8_t power);
+                                     uint8_t powerLevel);
 
     /**
      * Notify all WifiPhyListener objects of the given PHY event.

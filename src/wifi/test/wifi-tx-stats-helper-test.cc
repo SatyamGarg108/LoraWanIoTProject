@@ -168,6 +168,8 @@ WifiTxStatsHelperTest::DoSetup()
 void
 WifiTxStatsHelperTest::DoRun()
 {
+    Config::SetDefault("ns3::WifiRemoteStationManager::IncrementRetryCountUnderBa",
+                       BooleanValue(true));
     std::string dataMode;
     std::string ackMode;
     if (m_option == SINGLE_LINK_NON_QOS)
@@ -233,7 +235,8 @@ WifiTxStatsHelperTest::DoRun()
             if (freq == 6)
             {
                 mldChannelStr[1] = "{0, 20, BAND_6GHZ, 0}";
-                wifi.SetRemoteStationManager(static_cast<uint8_t>(1),
+                uint8_t linkId = 1;
+                wifi.SetRemoteStationManager(linkId,
                                              "ns3::ConstantRateWifiManager",
                                              "DataMode",
                                              StringValue(dataMode),
@@ -243,7 +246,13 @@ WifiTxStatsHelperTest::DoRun()
             else
             {
                 mldChannelStr[0] = "{0, 20, BAND_5GHZ, 0}";
-                wifi.SetRemoteStationManager(static_cast<uint8_t>(0),
+                // linkId is passed as a variable here because MSVC
+                // interprets uint8_t as a char, and the 0 value as a
+                // c-string null terminator \0. This results into a
+                // compilation error due to SetRemoteStationManager(uint8_t,...)
+                // and SetRemoteStationManager(std::string, ...) signatures.
+                uint8_t linkId = 0;
+                wifi.SetRemoteStationManager(linkId,
                                              "ns3::ConstantRateWifiManager",
                                              "DataMode",
                                              StringValue(dataMode),

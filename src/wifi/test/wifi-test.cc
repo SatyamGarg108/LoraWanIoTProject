@@ -2618,7 +2618,7 @@ class Issue40TestCase : public TestCase
     uint16_t m_rxCount; ///< Count number of successfully received data packets
     uint16_t m_txCount; ///< Count number of transmitted data packets
     uint16_t
-        m_txMacFinalDataFailedCount; ///< Count number of unsuccessfuly transmitted data packets
+        m_txMacFinalDataFailedCount; ///< Count number of unsuccessfully transmitted data packets
 };
 
 Issue40TestCase::Issue40TestCase()
@@ -2736,7 +2736,7 @@ Issue40TestCase::RunOne(bool useAmpdu)
                         staDevice.Get(0)->GetAddress());
 
     // Transmit a second data packet once the station is away from the access point: it should be
-    // sent with the same high modulation and be unsuccessfuly received
+    // sent with the same high modulation and be unsuccessfully received
     Simulator::Schedule(Seconds(2),
                         &Issue40TestCase::SendPackets,
                         this,
@@ -3616,7 +3616,7 @@ HeRuMcsDataRateTestCase::CheckDataRate(RuType ruType,
 {
     uint8_t staId = 1;
     auto txVector = WifiTxVector(HePhy::GetHeMcs(0),
-                                 0,
+                                 WIFI_MIN_TX_PWR_LEVEL,
                                  WIFI_PREAMBLE_HE_MU,
                                  guardInterval,
                                  1,

@@ -22,9 +22,7 @@
 #include "rng-seed-manager.h"
 #include "rng-stream.h"
 #include "string.h"
-#include "uinteger.h"
 
-#include <algorithm> // upper_bound
 #include <cmath>
 #include <iostream>
 #include <numbers>
@@ -652,8 +650,6 @@ WeibullRandomVariable::GetValue()
 
 NS_OBJECT_ENSURE_REGISTERED(NormalRandomVariable);
 
-const double NormalRandomVariable::INFINITE_VALUE = 1e307;
-
 TypeId
 NormalRandomVariable::GetTypeId()
 {
@@ -689,6 +685,12 @@ NormalRandomVariable::NormalRandomVariable()
     NS_LOG_FUNCTION(this);
 }
 
+void
+NormalRandomVariable::SetStdDev(double stdDev)
+{
+    m_variance = stdDev * stdDev;
+}
+
 double
 NormalRandomVariable::GetMean() const
 {
@@ -699,6 +701,12 @@ double
 NormalRandomVariable::GetVariance() const
 {
     return m_variance;
+}
+
+double
+NormalRandomVariable::GetStdDev() const
+{
+    return sqrt(m_variance);
 }
 
 double

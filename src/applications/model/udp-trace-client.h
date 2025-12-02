@@ -22,7 +22,6 @@
 namespace ns3
 {
 
-class Socket;
 class Packet;
 
 /**
@@ -87,7 +86,7 @@ class UdpTraceClient : public SourceApplication
      * @brief Return the maximum packet size
      * @return the maximum packet size
      */
-    uint16_t GetMaxPacketSize();
+    uint16_t GetMaxPacketSize() const;
 
     /**
      * @brief Set the maximum packet size
@@ -102,8 +101,8 @@ class UdpTraceClient : public SourceApplication
     void SetTraceLoop(bool traceLoop);
 
   private:
-    void StartApplication() override;
-    void StopApplication() override;
+    void DoStartApplication() override;
+    void CancelEvents() override;
 
     /**
      * @brief Set the remote port (temporary function until deprecated attributes are removed)
@@ -156,13 +155,12 @@ class UdpTraceClient : public SourceApplication
         char frameType;      //!< Frame type (I, P or B)
     };
 
-    uint32_t m_sent;                    //!< Counter for sent packets
-    Ptr<Socket> m_socket;               //!< Socket
+    uint32_t m_sent{0};                 //!< Counter for sent packets
     std::optional<uint16_t> m_peerPort; //!< Remote peer port (deprecated) // NS_DEPRECATED_3_44
     EventId m_sendEvent;                //!< Event to send the next packet
 
     std::vector<TraceEntry> m_entries;    //!< Entries in the trace to send
-    uint32_t m_currentEntry;              //!< Current entry index
+    uint32_t m_currentEntry{0};           //!< Current entry index
     static TraceEntry g_defaultEntries[]; //!< Default trace to send
     uint16_t m_maxPacketSize; //!< Maximum packet size to send (including the SeqTsHeader)
     bool m_traceLoop;         //!< Loop through the trace file
